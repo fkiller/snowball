@@ -1,0 +1,7 @@
+{
+  "AudioCaptureAllowed": false,
+  "AudioCaptureAllowedUrls": [
+    "https://chatgpt.com/",
+    "https://[*.]chatgpt.com/"
+  ]
+}

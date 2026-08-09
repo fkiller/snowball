@@ -1,0 +1,4 @@
+basicConstraints=CA:FALSE
+keyUsage=digitalSignature,keyEncipherment
+extendedKeyUsage=serverAuth
+subjectAltName=IP:${SNOWBALL_LAN_IP},DNS:snowball-router.local,DNS:snowball-voice.local

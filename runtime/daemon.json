@@ -1,0 +1,11 @@
+{
+  "data-root": "/mnt/sdcard/snowball-voice-docker",
+  "exec-root": "/var/run/snowball-voice-docker",
+  "pidfile": "/var/run/snowball-voice-docker.pid",
+  "hosts": ["unix:///var/run/snowball-voice-docker.sock"],
+  "bridge": "none",
+  "iptables": false,
+  "ip-forward": false,
+  "ip-masq": false,
+  "log-level": "warn"
+}

@@ -1,0 +1,29 @@
+services:
+  snowball-voice:
+    image: snowball-voice:0.1.6
+    container_name: snowball-voice
+    network_mode: host
+    restart: unless-stopped
+    read_only: true
+    shm_size: 1gb
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      SNOWBALL_LAN_IP: 192.168.1.1
+      SNOWBALL_HTTP_PORT: 8088
+      SNOWBALL_HTTPS_PORT: 8443
+      SNOWBALL_ICE_PORT: 49000
+      SNOWBALL_UPLINK_RTP_PORT: 49001
+      SNOWBALL_DOWNLINK_RTP_PORT: 49002
+      CHATGPT_URL: https://chatgpt.com/
+      TZ: America/New_York
+    volumes:
+      - snowball-voice-data:/data
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=1g,mode=1777
+      - /run:rw,nosuid,nodev,size=32m,mode=755
+
+volumes:
+  snowball-voice-data:

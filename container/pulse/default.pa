@@ -1,0 +1,8 @@
+.nofail
+load-module module-native-protocol-unix socket=/tmp/pulse/native auth-anonymous=1
+load-module module-null-sink sink_name=chatgpt_output_sink sink_properties=device.description=ChatGPT_Output rate=48000 channels=2
+load-module module-null-sink sink_name=chatgpt_mic_sink sink_properties=device.description=ChatGPT_Microphone rate=48000 channels=1
+load-module module-remap-source master=chatgpt_mic_sink.monitor source_name=chatgpt_mic_source source_properties=device.description=ChatGPT_Microphone
+set-default-sink chatgpt_output_sink
+set-default-source chatgpt_mic_source
+.fail

@@ -1,0 +1,34 @@
+FROM golang:1.24-bookworm AS gateway-update-builder
+WORKDIR /src
+COPY gateway/go.mod gateway/go.sum ./
+RUN go mod download
+COPY gateway/ ./
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/snowball-gateway .
+
+FROM snowball-voice:0.1.1
+
+USER root
+
+ARG NOVNC_VERSION=1.7.0
+RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSION}.tar.gz" \
+      -o /tmp/novnc.tar.gz \
+    && mkdir -p /tmp/novnc-unpack \
+    && tar -xzf /tmp/novnc.tar.gz -C /tmp/novnc-unpack \
+    && rm -rf /usr/share/novnc \
+    && mv "/tmp/novnc-unpack/noVNC-${NOVNC_VERSION}" /usr/share/novnc \
+    && rm -rf /tmp/novnc.tar.gz /tmp/novnc-unpack \
+    && rm -rf /opt/snowball/app /opt/snowball/services /opt/snowball/container /opt/snowball/tests
+
+WORKDIR /opt/snowball
+COPY app ./app
+COPY services ./services
+COPY container ./container
+COPY tests ./tests
+COPY container/chromium-policy.json /etc/chromium/policies/managed/snowball-voice.json
+COPY --from=gateway-update-builder /out/snowball-gateway /usr/local/bin/snowball-gateway
+
+RUN chmod +x container/*.sh \
+    && rm -rf .next .wrangler \
+    && npm run build
+
+USER pwuser
