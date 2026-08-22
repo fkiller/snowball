@@ -15,6 +15,10 @@ Snowball turns an ARM64 home router into a private, LAN-only voice terminal for 
 - Sends Web Push alerts when login, CAPTCHA, or human recovery is required.
 - Restarts Chromium and reconnects the controller if the browser window is closed.
 - Grants microphone capture only to `https://chatgpt.com` and its HTTPS subdomains.
+- Protects Voice controls, settings, and the live browser with a separate local administrator session.
+- Provides schema-driven Admin settings for wake commands, localized project prompts, silence timing, and future client discovery.
+- Pairs the Waveshare ESP32-S3 Audio Board through authenticated desktop Chrome/Edge Web Serial without granting Docker USB access.
+- Parses explicit ChatGPT/Codex Project commands and supports safe turn-based ChatGPT Web Project automation when the required UI controls are present.
 - Runs as one read-only, non-root ARM64 container under a dedicated Docker daemon.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the component model, media flows, trust boundaries, and Mermaid diagrams.
@@ -43,10 +47,14 @@ The checked-in defaults target the current router at `192.168.1.1`. Change the `
 
 ## Build and run
 
-The current image version is `0.1.6`.
+The current image version is `0.3.1`.
+
+This is the checked-in release tag, not a runtime deployment claim. The
+router's current image and health must be checked with `docker ps` against its
+dedicated daemon; development candidate images are never deployed implicitly.
 
 ```bash
-docker build --network host -t snowball-voice:0.1.6 .
+docker build --network host -t snowball-voice:0.3.1 .
 docker compose up -d
 docker compose ps
 ```
@@ -67,11 +75,18 @@ After installing the init script as `/etc/init.d/snowball-voice-dockerd`:
 ```bash
 export DOCKER_HOST=unix:///var/run/snowball-voice-docker.sock
 /etc/init.d/snowball-voice-dockerd start
-docker build --network host -t snowball-voice:0.1.6 .
+docker build --network host -t snowball-voice:0.3.1 .
 docker compose up -d
 ```
 
 The dedicated daemon disables Docker bridge creation, IP forwarding, masquerading, and Docker-managed iptables rules. Snowball therefore does not add routes or modify the router's WAN, VPN, or policy-based routing rules.
+
+Because that daemon intentionally has no Docker bridge, ad-hoc build or test
+containers that need outbound DNS must use host networking explicitly, for
+example `docker build --network host` or `docker run --network host ...`.
+This is a development invocation detail; the router host and the production
+`snowball-voice` container retain their normal outbound network access, while
+the production container remains LAN-only for inbound listeners.
 
 `Dockerfile.update` is a router-specific shortcut that overlays source changes on the locally retained `snowball-voice:0.1.1` base image. New installations should use the full `Dockerfile`.
 
@@ -79,10 +94,11 @@ The dedicated daemon disables Docker bridge creation, IP forwarding, masqueradin
 
 1. Open `http://192.168.1.1:8088` from the client and install the generated local CA.
 2. On iPhone or iPad, enable full trust under **Settings → General → About → Certificate Trust Settings**.
-3. Open `https://192.168.1.1:8443` and optionally add Snowball to the Home Screen.
-4. Select **Open Browser Console** and sign in to ChatGPT. Signing in never starts Voice.
-5. Return to Snowball and tap the center voice control to start a conversation.
-6. Enable alerts if you want recovery notifications for future login or CAPTCHA prompts.
+3. Read the one-time Snowball setup code with `docker logs snowball-voice`, open `https://192.168.1.1:8443`, and create the local administrator password.
+4. Optionally add Snowball to the Home Screen.
+5. Select **Open Browser Console** and sign in to ChatGPT. Snowball administrator authentication and ChatGPT authentication are separate; signing in never starts Voice.
+6. Return to Snowball and tap the center voice control to start a conversation.
+7. Open **Admin** to edit wake commands, project prompts, and turn timing. To configure a speaker, plug its USB-C port into the Admin computer, choose **Connect USB device**, and enter its Wi-Fi network. Enable alerts if you want recovery notifications for future login or CAPTCHA prompts.
 
 The console scales the `1360×900` Chromium desktop to the client viewport. Tap to click and use a two-finger gesture to scroll on touch screens.
 
@@ -93,6 +109,7 @@ The `/data` volume contains:
 - the Chromium profile and ChatGPT login session
 - the generated local CA and server certificate
 - VAPID keys and Web Push subscriptions
+- the Snowball administrator password hash and editable settings
 - gateway state
 
 Treat this volume like a credential store. None of that runtime state belongs in this repository or a Docker image.
@@ -102,10 +119,11 @@ Treat this volume like a credential store. None of that runtime state belongs in
 ```bash
 export DOCKER_HOST=unix:///var/run/snowball-voice-docker.sock
 docker inspect --format '{{.State.Health.Status}}' snowball-voice
-curl -k https://192.168.1.1:8443/api/status
+curl -k https://192.168.1.1:8443/api/health
 netstat -lntup | grep -E '8088|8443|49000'
 npm run lint
 npm test
+cd gateway && go test -race ./... && go vet ./...
 ```
 
 The browser smoke test opens the real Snowball UI with a synthetic client microphone, establishes WebRTC, confirms ChatGPT Voice becomes active, captures screenshots, and stops the session:
@@ -117,9 +135,22 @@ docker run --rm --network host --user 0 --shm-size 512m \
   -e SNOWBALL_TEST_OUTPUT=/artifacts \
   -v "$PWD/tests/browser-smoke.mjs:/opt/snowball/tests/browser-smoke-runtime.mjs:ro" \
   -v "$PWD/artifacts:/artifacts" \
-  --entrypoint node snowball-voice:0.1.6 \
+  --entrypoint node snowball-voice:0.3.1 \
   /opt/snowball/tests/browser-smoke-runtime.mjs
 ```
+
+For CI or router-side QA, use the isolated smoke runner instead. It creates a
+fresh, ephemeral administrator service account, uses a fake browser-controller
+service, and never mounts the production `/data` volume or ChatGPT profile:
+
+```bash
+./tools/run-qa-browser-smoke.sh
+```
+
+The QA account and password are generated inside the disposable container and
+are not written to the repository or production logs. This verifies the
+administrator session, WebRTC lifecycle, authoritative Voice state, and stop
+transition without requiring a user's credentials.
 
 ## Repository layout
 
@@ -140,5 +171,13 @@ docker run --rm --network host --user 0 --shm-size 512m \
 - Web Push depends on the client browser and its push service.
 - The local CA must be explicitly trusted on every client.
 - Chromium currently runs with `--no-sandbox` inside a capability-dropped, non-root container; the container and LAN boundary are part of the security model.
+- The ESP32 development firmware uses `Hi ESP` to start the full-duplex Voice path, with a bounded English command tail (`Resume`, `with <voice>`, and project commands), USB/Wi-Fi provisioning, pinned-CA TLS enrollment, P-256 device proof, replay-protected control, and a PCMA DTLS-SRTP media adapter. A bare wake falls back to a new session after the bounded tail timeout. Physical paired full-duplex acceptance is still required; the custom `ChatGPT` WakeNet model, signed OTA, Secure Boot, and flash encryption remain production blockers.
+- The Chromium adapter can automate an exact visible ChatGPT Web Project in
+  bounded turn-based mode: it speaks the localized prompt, captures one turn
+  through ChatGPT's separate dictation control, submits it, and reads the
+  answer aloud. It cannot access a Codex local project without a future paired
+  ChatGPT desktop host.
 
 The internal service, volume, and daemon identifiers retain the `snowball-voice` prefix so existing router installations can upgrade without losing their persistent ChatGPT session.
+
+See [Speaker pairing acceptance](docs/PAIRING_ACCEPTANCE.md), [Wake commands and project turn mode](docs/WAKE_COMMANDS.md), [Client discovery and pairing security](docs/CLIENT_DISCOVERY_SECURITY.md), and the [Snowball-minis IoT handoff](docs/SNOWBALL_MINIS_HANDOFF.md) for the acceptance gates, command roadmap, trust model, and current development transfer procedure.

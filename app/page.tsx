@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { VoiceConsole } from "./voice-console";
+import { SnowballApp } from "./snowball-app";
 
 export const metadata: Metadata = {
   title: "Snowball",
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function Home() {
-  return <VoiceConsole />;
+  return <SnowballApp />;
 }

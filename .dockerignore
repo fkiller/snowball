@@ -6,3 +6,8 @@ dist
 node_modules
 npm-debug.log
 README.md
+firmware/**/build
+firmware/**/build*/
+firmware/**/managed_components
+firmware/**/sdkconfig
+firmware/**/sdkconfig.old

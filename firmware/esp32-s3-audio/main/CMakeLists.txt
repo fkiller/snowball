@@ -1,0 +1,26 @@
+idf_component_register(
+    SRCS
+        "app_main.c"
+        "board_audio.c"
+        "command_recognizer.c"
+        "diagnostics.c"
+        "device_identity.c"
+        "media_session.c"
+        "provisioning.c"
+        "serial_output.c"
+        "speech.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        esp_event
+        esp_http_client
+        esp_driver_i2c
+        esp_driver_i2s
+        esp_io_expander_tca95xx_16bit
+        esp_netif
+        esp_timer
+        esp_wifi
+        esp_peer
+        json
+        mbedtls
+        nvs_flash
+)

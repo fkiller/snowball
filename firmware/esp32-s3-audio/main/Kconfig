@@ -1,0 +1,14 @@
+menu "Snowball"
+
+config SNOWBALL_COMMAND_TAIL
+    bool "Enable the English wake-word command tail"
+    default y
+    help
+        Use the measured MultiNet command recognizer after WakeNet. The free-
+        form request still stays in the Gateway/ChatGPT media stream.
+
+config SNOWBALL_HEAP_DIAGNOSTICS
+    bool "Emit heap and stack snapshots in diagnostic logs"
+    default y
+
+endmenu
