@@ -383,7 +383,7 @@ async function startVoice() {
     } else {
       activeObservations = 0;
     }
-    await page.waitForTimeout(250);
+    await page.waitForTimeout(100);
   }
   throw new Error("ChatGPT did not enter Voice mode. Open Browser Console to inspect the current page.");
 }
@@ -421,7 +421,7 @@ async function stopVoice() {
     } else {
       idleObservations = 0;
     }
-    await page?.waitForTimeout(200);
+    await page?.waitForTimeout(100);
   }
   throw new Error("ChatGPT did not leave Voice mode. Open Browser Console to inspect the current page.");
 }
@@ -438,7 +438,7 @@ async function waitForIdleVoicePage(label, timeout = 10_000) {
     } else {
       idleObservations = 0;
     }
-    await page?.waitForTimeout(250);
+    await page?.waitForTimeout(100);
   }
   throw new Error(`${label}: ${latest?.reason || "ChatGPT did not expose a stable idle Voice page."}`);
 }
