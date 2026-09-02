@@ -346,6 +346,24 @@ func (m *enrollmentManager) completeEvent(input devproto.EventRequest, status in
 	return errors.New("device is not enrolled")
 }
 
+func (m *enrollmentManager) getEventResult(input devproto.EventRequest) (devproto.EventResult, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for index := range m.devices {
+		record := &m.devices[index]
+		if record.HardwareID != input.HardwareID || record.PublicKeyFingerprint != input.PublicKeyFingerprint {
+			continue
+		}
+		if input.BootNonce == record.LastBootNonce && input.Counter == record.LastCounter && record.LastEventStatus != 0 {
+			return devproto.EventResult{
+				Status: record.LastEventStatus,
+				Body:   append([]byte(nil), record.LastEventResponse...),
+			}, true
+		}
+	}
+	return devproto.EventResult{}, false
+}
+
 // acceptEvent preserves the original strict replay API for callers that have
 // not opted into cached HTTP results. New device HTTP handlers should use
 // beginEvent and completeEvent as a pair.

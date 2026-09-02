@@ -59,6 +59,7 @@ static bool wakenet_enabled = true;
 static bool aec_enabled;
 static bool aec_available;
 static int64_t conversation_status_not_before_us;
+static int64_t conversation_start_time_us;
 
 static const char *voice_state_name(voice_state_t state) {
     switch (state) {
@@ -342,7 +343,8 @@ static void detect_task(void *argument) {
         }
 
         bool feedback_busy = board_audio_feedback_busy() ||
-            (state != VOICE_STATE_CONVERSATION && board_audio_stream_active());
+            (state != VOICE_STATE_CONVERSATION && board_audio_stream_active()) ||
+            (state == VOICE_STATE_CONVERSATION && (esp_timer_get_time() - conversation_start_time_us) < 5000000LL);
         if (feedback_busy) {
             if (wakenet_enabled) {
                 afe->disable_wakenet(afe_data);
@@ -512,12 +514,12 @@ static void detect_task(void *argument) {
                      * command detected in the bounded parallel window simply
                      * updates the command before media_connected queues it. */
                     begin_session(attempt);
-                    snowball_command_result_t new_chat = {
-                        .kind = SNOWBALL_COMMAND_NEW_CHAT,
+                    snowball_command_result_t default_command = {
+                        .kind = SNOWBALL_COMMAND_RESUME,
                         .target = SNOWBALL_COMMAND_TARGET_CHATGPT,
                         .confidence = 1.0f,
                     };
-                    if (on_command) on_command(attempt, &new_chat);
+                    if (on_command) on_command(attempt, &default_command);
                     command_recognizer_begin();
                     /* MultiNet now runs as a bounded parallel parser while
                      * media connects.  Its former board-audio reservation
@@ -546,7 +548,7 @@ static void detect_task(void *argument) {
                     command_recognizer_stop("command_listener_unavailable");
                     begin_session(attempt);
                     snowball_command_result_t fallback = {
-                        .kind = SNOWBALL_COMMAND_NEW_CHAT,
+                        .kind = SNOWBALL_COMMAND_RESUME,
                         .target = SNOWBALL_COMMAND_TARGET_CHATGPT,
                         .confidence = 0.0f,
                     };
@@ -555,12 +557,12 @@ static void detect_task(void *argument) {
 #else
                 begin_session(attempt);
                 (void)board_audio_queue_feedback_for_attempt(SNOWBALL_FEEDBACK_WAKE_READY, attempt);
-                snowball_command_result_t new_chat = {
-                    .kind = SNOWBALL_COMMAND_NEW_CHAT,
+                snowball_command_result_t default_command = {
+                    .kind = SNOWBALL_COMMAND_RESUME,
                     .target = SNOWBALL_COMMAND_TARGET_CHATGPT,
                     .confidence = 1.0f,
                 };
-                if (on_command) on_command(attempt, &new_chat);
+                if (on_command) on_command(attempt, &default_command);
 #endif
             } else {
                 begin_session(attempt);
@@ -668,6 +670,7 @@ void speech_session_activated(uint32_t attempt) {
     portENTER_CRITICAL(&speech_lock);
     if (attempt != 0 && attempt == active_attempt && voice_state == VOICE_STATE_CONNECTING) {
         voice_state = VOICE_STATE_CONVERSATION;
+        conversation_start_time_us = esp_timer_get_time();
         conversation_status_not_before_us = 0;
         activate = true;
     }

@@ -21,7 +21,7 @@
  * a second phrase. MultiNet receives the very same AFE stream immediately
  * after WakeNet fires, so "Hi ESP Resume" can be spoken as one continuous
  * phrase; a deliberate pause is not required. */
-#define COMMAND_TAIL_TIMEOUT_MS 1800
+#define COMMAND_TAIL_TIMEOUT_MS 600
 #define CANDIDATE_CATALOG_MAX 8192
 #define CANDIDATE_NAME_MAX 64
 #define CANDIDATE_COUNT_MAX 24
@@ -319,7 +319,7 @@ snowball_command_state_t command_recognizer_feed(
     if (state == ESP_MN_STATE_TIMEOUT) {
         stop_listening_locked("timeout");
         *result = (snowball_command_result_t){
-            .kind = SNOWBALL_COMMAND_NEW_CHAT,
+            .kind = SNOWBALL_COMMAND_RESUME,
             .target = SNOWBALL_COMMAND_TARGET_CHATGPT,
             .confidence = 1.0f,
         };

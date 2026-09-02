@@ -151,7 +151,7 @@ type gateway struct {
 	enrollment        *enrollmentManager
 	deviceDispatchMu  sync.Mutex
 	deviceDispatchSem chan struct{}
-	deviceDispatching map[string]struct{}
+	deviceDispatching map[string]chan struct{}
 }
 
 func env(name, fallback string) string {
@@ -275,7 +275,7 @@ func newGateway(cfg config) (*gateway, error) {
 		settings:          settings,
 		enrollment:        enrollment,
 		deviceDispatchSem: make(chan struct{}, 1),
-		deviceDispatching: make(map[string]struct{}),
+		deviceDispatching: make(map[string]chan struct{}),
 	}
 
 	if err := g.loadPushState(); err != nil {
@@ -1504,37 +1504,41 @@ func deviceDispatchKey(input devproto.EventRequest) string {
 // navigation and Voice startup, and retries the same signed envelope until
 // completeEvent stores the terminal result. Only one browser transaction is
 // admitted at a time; the replay proof prevents duplicate work on retries.
-func (g *gateway) scheduleDeviceDispatch(input devproto.EventRequest, deviceName string) (bool, bool) {
+func (g *gateway) scheduleDeviceDispatch(input devproto.EventRequest, deviceName string) (bool, bool, chan struct{}) {
 	key := deviceDispatchKey(input)
 	g.deviceDispatchMu.Lock()
 	if g.deviceDispatchSem == nil {
 		g.deviceDispatchSem = make(chan struct{}, 1)
 	}
 	if g.deviceDispatching == nil {
-		g.deviceDispatching = make(map[string]struct{})
+		g.deviceDispatching = make(map[string]chan struct{})
 	}
-	if _, exists := g.deviceDispatching[key]; exists {
+	if done, exists := g.deviceDispatching[key]; exists {
 		g.deviceDispatchMu.Unlock()
-		return true, true
+		return true, true, done
 	}
+	done := make(chan struct{})
 	select {
 	case g.deviceDispatchSem <- struct{}{}:
-		g.deviceDispatching[key] = struct{}{}
+		g.deviceDispatching[key] = done
 	default:
 		g.deviceDispatchMu.Unlock()
-		return false, false
+		return false, false, nil
 	}
 	g.deviceDispatchMu.Unlock()
 	go func() {
 		defer func() {
 			g.deviceDispatchMu.Lock()
-			delete(g.deviceDispatching, key)
+			if ch, ok := g.deviceDispatching[key]; ok {
+				close(ch)
+				delete(g.deviceDispatching, key)
+			}
 			<-g.deviceDispatchSem
 			g.deviceDispatchMu.Unlock()
 		}()
 		g.dispatchDeviceCommand(input, deviceName)
 	}()
-	return true, false
+	return true, false, done
 }
 
 func (g *gateway) dispatchDeviceCommand(input devproto.EventRequest, deviceName string) {
@@ -1723,7 +1727,8 @@ func (g *gateway) handleDeviceEvent(w http.ResponseWriter, r *http.Request) {
 		// a Gateway restart (the in-memory dispatch map is empty), while the map
 		// prevents an ordinary board retry from launching duplicate browser work.
 		if input.Event == "command" && deviceBrowserCommand(input.Command) {
-			if scheduled, _ := g.scheduleDeviceDispatch(input, acceptance.Record.Name); !scheduled {
+			scheduled, _, done := g.scheduleDeviceDispatch(input, acceptance.Record.Name)
+			if !scheduled {
 				writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 					"version":  1,
 					"accepted": true,
@@ -1732,6 +1737,18 @@ func (g *gateway) handleDeviceEvent(w http.ResponseWriter, r *http.Request) {
 					"action":   "device_command_queue_full",
 				})
 				return
+			}
+			if done != nil {
+				select {
+				case <-done:
+					if res, ok := g.enrollment.getEventResult(input); ok {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(res.Status)
+						_, _ = w.Write(res.Body)
+						return
+					}
+				case <-time.After(1500 * time.Millisecond):
+				}
 			}
 		}
 		// Tell the board to retry the same signed event instead of turning an
@@ -1793,6 +1810,9 @@ func (g *gateway) handleDeviceEvent(w http.ResponseWriter, r *http.Request) {
 	// Browser automation is deliberately conservative at this boundary. A
 	// signed command is accepted quickly, then dispatched by one bounded worker;
 	// the board keeps the media peer alive while Chromium catches up.
+	if input.Event == "wake" {
+		go g.speculativePrewarmVoice(record.PublicKeyFingerprint)
+	}
 	if input.Event == "command" {
 		result["command"] = input.Command
 		wakeWordEnabled := true
@@ -1806,12 +1826,24 @@ func (g *gateway) handleDeviceEvent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if deviceBrowserCommand(input.Command) {
-			scheduled, _ := g.scheduleDeviceDispatch(input, record.Name)
+			scheduled, _, done := g.scheduleDeviceDispatch(input, record.Name)
 			if !scheduled {
 				result["action"] = "device_command_queue_full"
 				result["outcome"] = "failed"
 				writeDeviceResult(http.StatusServiceUnavailable, result)
 				return
+			}
+			if done != nil {
+				select {
+				case <-done:
+					if res, ok := g.enrollment.getEventResult(input); ok {
+						w.Header().Set("Content-Type", "application/json")
+						w.WriteHeader(res.Status)
+						_, _ = w.Write(res.Body)
+						return
+					}
+				case <-time.After(1500 * time.Millisecond):
+				}
 			}
 			result["action"] = "device_command_processing"
 			result["outcome"] = "processing"
@@ -2057,6 +2089,45 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
+}
+
+func (g *gateway) speculativePrewarmVoice(fingerprint string) {
+	wakeWordEnabled := true
+	if g.settings != nil {
+		wakeWordEnabled = g.settings.get().WakeWord.Enabled
+	}
+	if !wakeWordEnabled {
+		return
+	}
+	status, _, err := g.browserRequest(http.MethodGet, "/status")
+	if err != nil || status.VoiceActive || status.State != "ready" {
+		return
+	}
+	g.voiceMu.Lock()
+	status, _, err = g.browserRequest(http.MethodGet, "/status")
+	if err != nil || status.VoiceActive || status.State != "ready" {
+		g.voiceMu.Unlock()
+		return
+	}
+	log.Printf("speculative voice pre-warm triggered by wake event from %s", fingerprint)
+	prewarmed, prewarmErr := g.browserVoiceAction("/voice/resume")
+	g.voiceMu.Unlock()
+	if prewarmErr != nil {
+		log.Printf("speculative voice pre-warm error: %v", prewarmErr)
+		return
+	}
+	log.Printf("speculative voice pre-warm ready active=%v url=%s", prewarmed.VoiceActive, prewarmed.URL)
+	time.AfterFunc(6*time.Second, func() {
+		g.peerMu.RLock()
+		connected := g.peerConnected
+		g.peerMu.RUnlock()
+		if !connected {
+			log.Printf("speculative voice session unclaimed after 6s; stopping")
+			g.voiceMu.Lock()
+			_, _ = g.browserVoiceAction("/voice/stop")
+			g.voiceMu.Unlock()
+		}
+	})
 }
 
 func main() {

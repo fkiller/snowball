@@ -373,7 +373,9 @@ async function startVoice() {
   }
   await control.click({ timeout: 3000 });
   lastError = "";
-  const deadline = Date.now() + 8000;
+  const stopSelector = stopVoiceSelectors.join(", ");
+  await page.locator(stopSelector).first().waitFor({ state: "visible", timeout: 6000 }).catch(() => undefined);
+  const deadline = Date.now() + 4000;
   let activeObservations = 0;
   while (Date.now() < deadline) {
     const next = await inspectBrowser();
@@ -383,7 +385,7 @@ async function startVoice() {
     } else {
       activeObservations = 0;
     }
-    await page.waitForTimeout(100);
+    await page.waitForTimeout(50);
   }
   throw new Error("ChatGPT did not enter Voice mode. Open Browser Console to inspect the current page.");
 }
@@ -405,7 +407,9 @@ async function stopVoice() {
   const control = await findVisible(stopVoiceSelectors);
   if (!control) throw new Error("ChatGPT Voice is active but its supported End voice control is unavailable.");
   await control.click({ timeout: 3000 });
-  const deadline = Date.now() + 5000;
+  const startSelector = startVoiceSelectors.join(", ");
+  await page.locator(startSelector).first().waitFor({ state: "visible", timeout: 4000 }).catch(() => undefined);
+  const deadline = Date.now() + 4000;
   let idleObservations = 0;
   while (Date.now() < deadline) {
     const next = await inspectBrowser();
@@ -421,7 +425,7 @@ async function stopVoice() {
     } else {
       idleObservations = 0;
     }
-    await page?.waitForTimeout(100);
+    await page?.waitForTimeout(50);
   }
   throw new Error("ChatGPT did not leave Voice mode. Open Browser Console to inspect the current page.");
 }
@@ -489,17 +493,15 @@ async function resumeVoice() {
   await recoverFrontendLoginShell();
   const current = await inspectBrowser();
   if (current.voiceActive) {
-    if (!conversationUrl(current.url)) {
-      throw new Error("The active Voice page is not a resumable ChatGPT conversation.");
-    }
     return current;
   }
   let resumable = conversationUrl(current.url);
-  if (!resumable) resumable = lastConversationUrl;
-  if (!resumable) throw new Error("No previous ChatGPT conversation is available to resume.");
-  if (page.url() !== resumable) {
-    await page.goto(resumable, { waitUntil: "domcontentloaded", timeout: 60_000 });
-    await waitForIdleVoicePage("The previous ChatGPT conversation did not become ready");
+  if (!resumable && lastConversationUrl) {
+    resumable = lastConversationUrl;
+    if (page.url() !== resumable) {
+      await page.goto(resumable, { waitUntil: "domcontentloaded", timeout: 60_000 });
+      await waitForIdleVoicePage("The previous ChatGPT conversation did not become ready");
+    }
   }
   return startVoice();
 }
