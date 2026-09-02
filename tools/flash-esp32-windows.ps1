@@ -2,10 +2,15 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$Port,
-    [string]$BuildDir = (Join-Path $PSScriptRoot '..\firmware\esp32-s3-audio\build-minis-ghost')
+    [string]$BuildDir = $(
+        $fresh = Join-Path $PSScriptRoot '..\firmware\esp32-s3-audio\build'
+        if (Test-Path -LiteralPath (Join-Path $fresh 'snowball_speaker.bin')) { $fresh }
+        else { Join-Path $PSScriptRoot '..\firmware\esp32-s3-audio\build-minis-ghost' }
+    )
 )
 
 $ErrorActionPreference = 'Stop'
+$env:PYTHONIOENCODING = 'utf-8'
 
 # This is the direct-USB counterpart to flash-esp32.sh.  Keep its command
 # tail deliberately fixed: Wi-Fi, pairing and device identity live in NVS at
