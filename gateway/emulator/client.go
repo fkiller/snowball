@@ -35,7 +35,7 @@ func NewClient(cfg Config, idMgr *IdentityManager) *Client {
 		cfg.CommandTimeout = 30 * time.Second
 	}
 	if cfg.PollInterval <= 0 {
-		cfg.PollInterval = 200 * time.Millisecond
+		cfg.PollInterval = 500 * time.Millisecond
 	}
 	return &Client{
 		cfg:          cfg,
