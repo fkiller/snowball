@@ -13,6 +13,10 @@
 # testing
 /coverage
 /artifacts/
+/captures/
+/traces/
+*.pcap
+*.pcapng
 
 # next.js
 /.next/
@@ -22,6 +26,21 @@
 # misc
 .DS_Store
 *.pem
+*.key
+*.crt
+*.der
+*.p12
+*.pfx
+
+# generated logs and machine-local configuration
+*.log
+/eim_config.toml
+/.snowball-emulator/
+/.snowball-device-emulator/
+
+# generated runtime state (may contain credentials and device identities)
+/data/
+/runtime-state/
 
 # debug
 npm-debug.log*
@@ -41,6 +60,7 @@ yarn-error.log*
 /work/
 
 # ESP-IDF generated state
+/build-*/
 /firmware/**/build/
 /firmware/**/build-*/
 /firmware/**/managed_components/

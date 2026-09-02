@@ -22,6 +22,7 @@ typedef void (*snowball_media_callback_t)(
 esp_err_t media_session_init(snowball_media_callback_t callback);
 esp_err_t media_session_start(uint32_t boot_nonce, uint32_t offer_counter, uint32_t attempt);
 esp_err_t media_session_push_pcm16k(const int16_t *samples, size_t sample_count);
+void media_session_enable_uplink(uint32_t attempt);
 void media_session_stop(void);
 bool media_session_active(void);
 bool media_session_connected(void);

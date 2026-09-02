@@ -1,6 +1,7 @@
 #include "command_recognizer.h"
 
 #include <stdbool.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <string.h>
 #include <strings.h>
@@ -8,6 +9,7 @@
 #include "cJSON.h"
 #include "esp_check.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_mn_iface.h"
 #include "esp_mn_models.h"
 #include "esp_mn_speech_commands.h"
@@ -51,6 +53,16 @@ static model_iface_data_t *model_data;
 static bool listening;
 static SemaphoreHandle_t command_mutex;
 static bool grammar_allocated;
+static uint32_t inference_frames;
+static int64_t inference_started_us;
+
+static void stop_listening_locked(const char *reason) {
+    if (!listening) return;
+    int64_t elapsed_ms = (esp_timer_get_time() - inference_started_us) / 1000;
+    listening = false;
+    ESP_LOGI(TAG, "[MULTINET] inference=stop reason=%s frames=%" PRIu32 " elapsed_ms=%" PRIi64,
+             reason ? reason : "unspecified", inference_frames, elapsed_ms);
+}
 
 static bool safe_candidate_name(const char *value) {
     size_t length = value ? strlen(value) : 0;
@@ -275,6 +287,15 @@ void command_recognizer_begin(void) {
     if (!multinet || !model_data || !command_mutex || xSemaphoreTake(command_mutex, portMAX_DELAY) != pdTRUE) return;
     multinet->clean(model_data);
     listening = true;
+    inference_frames = 0;
+    inference_started_us = esp_timer_get_time();
+    ESP_LOGI(TAG, "[MULTINET] inference=start timeout_ms=%d", COMMAND_TAIL_TIMEOUT_MS);
+    xSemaphoreGive(command_mutex);
+}
+
+void command_recognizer_stop(const char *reason) {
+    if (!command_mutex || xSemaphoreTake(command_mutex, portMAX_DELAY) != pdTRUE) return;
+    stop_listening_locked(reason);
     xSemaphoreGive(command_mutex);
 }
 
@@ -289,13 +310,14 @@ snowball_command_state_t command_recognizer_feed(
         xSemaphoreGive(command_mutex);
         return SNOWBALL_COMMAND_DETECTING;
     }
+    ++inference_frames;
     esp_mn_state_t state = multinet->detect(model_data, (int16_t *)samples);
     if (state == ESP_MN_STATE_DETECTING) {
         xSemaphoreGive(command_mutex);
         return SNOWBALL_COMMAND_DETECTING;
     }
     if (state == ESP_MN_STATE_TIMEOUT) {
-        listening = false;
+        stop_listening_locked("timeout");
         *result = (snowball_command_result_t){
             .kind = SNOWBALL_COMMAND_NEW_CHAT,
             .target = SNOWBALL_COMMAND_TARGET_CHATGPT,
@@ -329,7 +351,7 @@ snowball_command_state_t command_recognizer_feed(
         .confidence = confidence,
     };
     strlcpy(result->name, definition->name, sizeof(result->name));
-    listening = false;
+    stop_listening_locked("command_detected");
     ESP_LOGI(TAG, "command tail resolved: id=%d phrase=%s confidence=%.3f",
              definition->id, definition->phrase, confidence);
     xSemaphoreGive(command_mutex);

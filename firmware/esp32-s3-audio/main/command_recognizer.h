@@ -41,6 +41,10 @@ esp_err_t command_recognizer_store_catalog(const char *catalog_json);
  * the first project/voice command becomes available. */
 esp_err_t command_recognizer_rebuild(void);
 void command_recognizer_begin(void);
+/* Stops inference without destroying the already-loaded model.  This keeps
+ * MultiNet out of the full-duplex path while preserving the next command
+ * window's startup latency. */
+void command_recognizer_stop(const char *reason);
 snowball_command_state_t command_recognizer_feed(
     const int16_t *samples,
     snowball_command_result_t *result

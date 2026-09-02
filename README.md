@@ -181,3 +181,8 @@ transition without requiring a user's credentials.
 The internal service, volume, and daemon identifiers retain the `snowball-voice` prefix so existing router installations can upgrade without losing their persistent ChatGPT session.
 
 See [Speaker pairing acceptance](docs/PAIRING_ACCEPTANCE.md), [Wake commands and project turn mode](docs/WAKE_COMMANDS.md), [Client discovery and pairing security](docs/CLIENT_DISCOVERY_SECURITY.md), and the [Snowball-minis IoT handoff](docs/SNOWBALL_MINIS_HANDOFF.md) for the acceptance gates, command roadmap, trust model, and current development transfer procedure.
+
+The planned unattended paired-device test loop is documented in the
+[paired speaker emulator plan](docs/DEVICE_EMULATOR_PLAN.md). It keeps protocol,
+media, and local transcription testing separate from the remaining physical
+WakeNet, codec, and PSRAM acceptance gates.

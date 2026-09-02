@@ -46,6 +46,7 @@ static const audio_codec_if_t *output_codec;
 static esp_codec_dev_handle_t output_device;
 static esp_codec_dev_sample_info_t output_sample;
 static bool output_open;
+static bool speaker_amplifier_enabled;
 static int32_t acknowledgement_silence[512 * 2];
 static QueueHandle_t feedback_queue;
 static SemaphoreHandle_t output_mutex;
@@ -135,9 +136,21 @@ static esp_err_t enable_speaker_amplifier(void) {
         TAG,
         "enable speaker amplifier"
     );
+    speaker_amplifier_enabled = true;
     vTaskDelay(pdMS_TO_TICKS(50));
     ESP_LOGI(TAG, "speaker amplifier enabled through TCA9555 EXIO8");
     return ESP_OK;
+}
+
+static esp_err_t set_speaker_amplifier(bool enabled) {
+    if (!io_expander || speaker_amplifier_enabled == enabled) return ESP_OK;
+    esp_err_t result = esp_io_expander_set_level(
+        io_expander,
+        AUDIO_PA_EXPANDER_PIN,
+        enabled ? 1 : 0
+    );
+    if (result == ESP_OK) speaker_amplifier_enabled = enabled;
+    return result;
 }
 
 static esp_err_t init_i2s(void) {
@@ -346,7 +359,8 @@ static esp_err_t play_reserved_feedback(snowball_audio_feedback_t feedback, uint
 
     esp_err_t result = ESP_OK;
     int32_t frames[128 * 2] = {0};
-    if (!output_open) {
+    if (result == ESP_OK) result = set_speaker_amplifier(true);
+    if (result == ESP_OK && !output_open) {
         result = esp_codec_dev_open(output_device, &output_sample);
         if (result == ESP_OK) output_open = true;
     }
@@ -376,6 +390,7 @@ static esp_err_t play_reserved_feedback(snowball_audio_feedback_t feedback, uint
         (void)esp_codec_dev_close(output_device);
         output_open = false;
     }
+    (void)set_speaker_amplifier(false);
     xSemaphoreGive(output_mutex);
     return result;
 }
@@ -599,7 +614,8 @@ esp_err_t board_audio_stream_start(void) {
         return ESP_ERR_TIMEOUT;
     }
     esp_err_t result = ESP_OK;
-    if (!output_open) {
+    result = set_speaker_amplifier(true);
+    if (result == ESP_OK && !output_open) {
         result = esp_codec_dev_open(output_device, &output_sample);
         if (result == ESP_OK) output_open = true;
     }
@@ -655,6 +671,7 @@ void board_audio_stream_stop(void) {
         (void)esp_codec_dev_close(output_device);
         output_open = false;
     }
+    (void)set_speaker_amplifier(false);
     xSemaphoreGive(output_mutex);
 }
 

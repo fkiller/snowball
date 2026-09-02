@@ -22,6 +22,7 @@ static uint32_t event_counter;
 static uint32_t boot_nonce;
 static uint32_t current_attempt;
 static uint32_t failure_feedback_attempt;
+static uint32_t end_feedback_attempt;
 static snowball_command_result_t current_command;
 
 static uint32_t next_counter(void) {
@@ -41,6 +42,20 @@ static bool take_failure_feedback_pending(uint32_t attempt) {
     portENTER_CRITICAL(&app_lock);
     bool pending = failure_feedback_attempt == attempt;
     if (pending) failure_feedback_attempt = 0;
+    portEXIT_CRITICAL(&app_lock);
+    return pending;
+}
+
+static void set_end_feedback_pending(uint32_t attempt) {
+    portENTER_CRITICAL(&app_lock);
+    end_feedback_attempt = attempt;
+    portEXIT_CRITICAL(&app_lock);
+}
+
+static bool take_end_feedback_pending(uint32_t attempt) {
+    portENTER_CRITICAL(&app_lock);
+    bool pending = end_feedback_attempt == attempt;
+    if (pending) end_feedback_attempt = 0;
     portEXIT_CRITICAL(&app_lock);
     return pending;
 }
@@ -96,6 +111,7 @@ static uint32_t wake_event(int channel) {
     current_attempt = attempt;
     current_command = (snowball_command_result_t){0};
     failure_feedback_attempt = 0;
+    end_feedback_attempt = 0;
     portEXIT_CRITICAL(&app_lock);
     trace_event("wake_detected", attempt, "hi_esp", -1.0f);
     serial_output_printf(
@@ -117,21 +133,6 @@ static const char *command_wire_name(snowball_command_kind_t kind) {
         default: return "";
     }
 }
-
-#if CONFIG_SNOWBALL_COMMAND_TAIL
-static snowball_audio_feedback_t command_feedback(const snowball_command_result_t *command) {
-    switch (command->kind) {
-        case SNOWBALL_COMMAND_NEW_CHAT: return SNOWBALL_FEEDBACK_COMMAND_NEW_CHAT;
-        case SNOWBALL_COMMAND_RESUME: return SNOWBALL_FEEDBACK_COMMAND_RESUME;
-        case SNOWBALL_COMMAND_VOICE: return SNOWBALL_FEEDBACK_COMMAND_VOICE;
-        case SNOWBALL_COMMAND_PROJECT:
-            return command->target == SNOWBALL_COMMAND_TARGET_CODEX
-                ? SNOWBALL_FEEDBACK_COMMAND_CODEX_PROJECT
-                : SNOWBALL_FEEDBACK_COMMAND_CHATGPT_PROJECT;
-        default: return SNOWBALL_FEEDBACK_COMMAND_NOT_RECOGNIZED;
-    }
-}
-#endif
 
 static esp_err_t queue_command(uint32_t attempt, const snowball_command_result_t *command) {
     snowball_device_event_t event = {
@@ -167,13 +168,16 @@ static void command_event(uint32_t attempt, const snowball_command_result_t *com
     set_current_command(attempt, command);
     const char *wire_command = command_wire_name(command->kind);
     trace_event("command_resolved", attempt, wire_command, command->confidence);
-    /* The speech transition queues the wake acknowledgement once. Add one
-       semantic tone after resolution as well, including bare Hi ESP/new_chat,
-       so a slow browser cannot look like a dead microphone. */
-#if CONFIG_SNOWBALL_COMMAND_TAIL
-    (void)board_audio_queue_feedback_for_attempt(command_feedback(command), attempt);
-#endif
+    /* A command is not browser Voice readiness.  The old high “new chat” tone
+       here invited speech while the Gateway was still navigating the browser. */
 
+    /* The bare wake opens the media path immediately.  A MultiNet result
+       arriving during its short parallel window replaces current_command;
+       media_connected later queues exactly that final command to Gateway. */
+    if (media_session_active()) {
+        trace_event("command_updated_before_gateway", attempt, wire_command, command->confidence);
+        return;
+    }
     esp_err_t result = media_session_start(boot_nonce, next_counter(), attempt);
     if (result != ESP_OK) {
         trace_event(
@@ -191,9 +195,22 @@ static void command_event(uint32_t attempt, const snowball_command_result_t *com
 }
 
 static void microphone_audio(const int16_t *samples, size_t sample_count) {
-    if (media_session_connected()) {
+    if (media_session_active()) {
         (void)media_session_push_pcm16k(samples, sample_count);
     }
+}
+
+/* The second Hi ESP is a local, attempt-scoped end signal.  Do not wait for
+ * ChatGPT to interpret spoken text: stop the device transport and let its
+ * normal terminal media callback return speech to IDLE. */
+static void end_session_event(uint32_t attempt) {
+    if (!attempt_is_current(attempt)) {
+        trace_event("stale_end_wake_ignored", attempt, "attempt_mismatch", -1.0f);
+        return;
+    }
+    trace_event("end_wake_detected", attempt, "hi_esp", -1.0f);
+    set_end_feedback_pending(attempt);
+    media_session_stop();
 }
 
 static void media_event(snowball_media_event_t event, uint32_t attempt, const char *detail) {
@@ -244,6 +261,8 @@ static void media_event(snowball_media_event_t event, uint32_t attempt, const ch
             speech_end_session(attempt);
             if (take_failure_feedback_pending(attempt)) {
                 (void)board_audio_queue_feedback_for_attempt(SNOWBALL_FEEDBACK_ACTION_FAILED, attempt);
+            } else if (take_end_feedback_pending(attempt)) {
+                (void)board_audio_queue_feedback_for_attempt(SNOWBALL_FEEDBACK_ACTION_EXECUTED, attempt);
             }
             break;
     }
@@ -279,6 +298,13 @@ static void delivery_event(
                     SNOWBALL_FEEDBACK_ACTION_EXECUTED,
                     event->diagnostic_attempt
                 );
+            } else {
+                /* A WebRTC peer alone is not evidence that ChatGPT Voice is
+                 * ready. The signed executed receipt follows the Gateway's
+                 * authoritative browser action, so only now arm Hi ESP as
+                 * the in-conversation END_SESSION keyword. */
+                media_session_enable_uplink(event->diagnostic_attempt);
+                speech_session_activated(event->diagnostic_attempt);
             }
             break;
         case SNOWBALL_DELIVERY_ACCEPTED:
@@ -349,7 +375,7 @@ void app_main(void) {
     board_audio_set_feedback_callback(feedback_event);
     ESP_ERROR_CHECK(media_session_init(media_event));
     diagnostics_memory_snapshot("media_ready", 0);
-    ESP_ERROR_CHECK(speech_start(wake_event, command_event, microphone_audio));
+    ESP_ERROR_CHECK(speech_start(wake_event, command_event, end_session_event, microphone_audio));
     diagnostics_memory_snapshot("speech_ready", 0);
     /* Candidate names are fetched over the authenticated device channel after
        Wi-Fi/enrollment settle. The grammar consumes the persisted catalog on

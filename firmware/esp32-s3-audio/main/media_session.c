@@ -20,12 +20,17 @@
 #define MEDIA_CONNECT_TIMEOUT_MS 30000
 #define MEDIA_AUDIO_SAMPLES_MAX 320
 #define MEDIA_AUDIO_QUEUE_DEPTH 8
+#define MEDIA_PREVOICE_FRAME_CAPACITY 200 /* 8 seconds of 40 ms G.711A frames */
 #define MEDIA_TLS_MIN_PSRAM_BLOCK (128U << 10)
 #define MEDIA_TLS_MIN_INTERNAL_BLOCK (16U << 10)
 
 static const char *TAG = "snowball/media";
 static portMUX_TYPE media_lock = portMUX_INITIALIZER_UNLOCKED;
 static QueueHandle_t audio_queue;
+static size_t prevoice_count;
+static size_t prevoice_read;
+static bool uplink_enabled;
+static int64_t prevoice_next_send_us;
 static snowball_media_callback_t event_callback;
 static esp_peer_handle_t active_peer;
 static TaskHandle_t media_task_handle;
@@ -70,6 +75,8 @@ typedef struct {
     uint32_t pts;
     uint8_t data[MEDIA_AUDIO_SAMPLES_MAX];
 } encoded_audio_t;
+
+static encoded_audio_t *prevoice_frames;
 
 static uint8_t linear_to_alaw(int16_t sample) {
     static const uint16_t segment_end[8] = {
@@ -127,19 +134,6 @@ static int peer_state_callback(esp_peer_state_t state, void *context) {
     portEXIT_CRITICAL(&media_lock);
     ESP_LOGI(TAG, "peer state %d", state);
     return 0;
-}
-
-static void peer_dtls_close_callback(void *context) {
-    (void)context;
-    /* This hook runs synchronously inside esp_peer_main_loop. Only publish the
-       transport transition here; the media task owns codec and peer cleanup. */
-    portENTER_CRITICAL(&media_lock);
-    if (active) {
-        connected = false;
-        dtls_closed = true;
-        stop_requested = true;
-    }
-    portEXIT_CRITICAL(&media_lock);
 }
 
 static int peer_message_callback(esp_peer_msg_t *message, void *context) {
@@ -236,6 +230,36 @@ static void send_queued_audio(esp_peer_handle_t peer) {
         }
     }
     memset(&audio, 0, sizeof(audio));
+}
+
+/* Gateway's signed executed receipt means the browser has entered Voice.
+ * Replay the bounded preserved opening at its original 40 ms cadence, rather
+ * than as a burst into the virtual microphone. */
+static void send_prevoice_audio(esp_peer_handle_t peer) {
+    encoded_audio_t audio = {0};
+    bool available = false;
+    int64_t now = esp_timer_get_time();
+    portENTER_CRITICAL(&media_lock);
+    if (uplink_enabled && prevoice_read < prevoice_count && now >= prevoice_next_send_us) {
+        audio = prevoice_frames[prevoice_read++];
+        prevoice_next_send_us = now + 40000;
+        available = true;
+    }
+    portEXIT_CRITICAL(&media_lock);
+    if (!available) return;
+    esp_peer_audio_frame_t frame = { .pts = audio.pts, .data = audio.data, .size = audio.size };
+    int result = esp_peer_send_audio(peer, &frame);
+    if (result == ESP_PEER_ERR_WOULD_BLOCK) {
+        portENTER_CRITICAL(&media_lock);
+        if (prevoice_read > 0) --prevoice_read;
+        prevoice_next_send_us = esp_timer_get_time() + 10000;
+        portEXIT_CRITICAL(&media_lock);
+    } else if (result != ESP_PEER_ERR_NONE) {
+        ESP_LOGW(TAG, "pre-Voice audio send failed: %d", result);
+    } else {
+        ++uplink_frames;
+        if (uplink_frames == 1) ESP_LOGI(TAG, "first preserved microphone frame sent: %u bytes", (unsigned)audio.size);
+    }
 }
 
 static void media_task(void *argument) {
@@ -360,10 +384,23 @@ static void media_task(void *argument) {
                 diagnostics_memory_snapshot("voice_connected", session_attempt);
                 publish(SNOWBALL_MEDIA_CONNECTED, "pcma_connected");
             }
-            send_queued_audio(active_peer);
+            send_prevoice_audio(active_peer);
+            portENTER_CRITICAL(&media_lock);
+            bool replaying_prevoice = uplink_enabled && prevoice_read < prevoice_count;
+            portEXIT_CRITICAL(&media_lock);
+            if (!replaying_prevoice) send_queued_audio(active_peer);
         } else if (state == ESP_PEER_STATE_CONNECT_FAILED ||
                    (published_connected && state == ESP_PEER_STATE_DISCONNECTED)) {
-            if (!published_connected) failure = "peer_connect_failed";
+            if (state == ESP_PEER_STATE_DISCONNECTED) {
+                /* esp_peer 1.2.7 reports a remote DTLS close through its
+                 * state callback.  Keep this transport transition local; the
+                 * media task still owns codec and peer cleanup below. */
+                portENTER_CRITICAL(&media_lock);
+                dtls_closed = true;
+                portEXIT_CRITICAL(&media_lock);
+            } else {
+                failure = "peer_connect_failed";
+            }
             break;
         } else if (!published_connected && esp_timer_get_time() >= deadline) {
             failure = "peer_connect_timeout";
@@ -416,9 +453,10 @@ cleanup:
 esp_err_t media_session_init(snowball_media_callback_t callback) {
     if (!callback) return ESP_ERR_INVALID_ARG;
     if (!audio_queue) audio_queue = xQueueCreate(MEDIA_AUDIO_QUEUE_DEPTH, sizeof(encoded_audio_t));
-    if (!audio_queue) return ESP_ERR_NO_MEM;
+    if (!prevoice_frames) prevoice_frames = heap_caps_calloc(
+        MEDIA_PREVOICE_FRAME_CAPACITY, sizeof(*prevoice_frames), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!audio_queue || !prevoice_frames) return ESP_ERR_NO_MEM;
     event_callback = callback;
-    esp_peer_set_dtls_close_callback(peer_dtls_close_callback, NULL);
     int result = esp_peer_pre_generate_cert();
     if (result != ESP_PEER_ERR_NONE) {
         ESP_LOGW(TAG, "DTLS certificate pre-generation failed: %d", result);
@@ -446,6 +484,10 @@ esp_err_t media_session_start(uint32_t boot_nonce, uint32_t offer_counter, uint3
     uplink_frames = 0;
     downlink_frames = 0;
     speaker_samples = 0;
+    prevoice_count = 0;
+    prevoice_read = 0;
+    uplink_enabled = false;
+    prevoice_next_send_us = 0;
     portEXIT_CRITICAL(&media_lock);
     xQueueReset(audio_queue);
     if (xTaskCreate(media_task, "snowball_media", 16384, NULL, 6, &media_task_handle) != pdPASS) {
@@ -460,7 +502,7 @@ esp_err_t media_session_start(uint32_t boot_nonce, uint32_t offer_counter, uint3
 
 esp_err_t media_session_push_pcm16k(const int16_t *samples, size_t sample_count) {
     if (!samples || sample_count < 2) return ESP_ERR_INVALID_ARG;
-    if (!media_session_connected()) return ESP_ERR_INVALID_STATE;
+    if (!media_session_active()) return ESP_ERR_INVALID_STATE;
     size_t source = 0;
     while (source + 1 < sample_count) {
         encoded_audio_t audio = {
@@ -471,9 +513,30 @@ esp_err_t media_session_push_pcm16k(const int16_t *samples, size_t sample_count)
             audio.data[audio.size++] = linear_to_alaw((int16_t)averaged);
             source += 2;
         }
+        portENTER_CRITICAL(&media_lock);
+        bool hold_for_voice = !uplink_enabled;
+        if (hold_for_voice && prevoice_count < MEDIA_PREVOICE_FRAME_CAPACITY) {
+            prevoice_frames[prevoice_count++] = audio;
+            portEXIT_CRITICAL(&media_lock);
+            continue;
+        }
+        portEXIT_CRITICAL(&media_lock);
+        if (hold_for_voice) continue; /* bounded: retain opening speech, not unbounded audio */
         if (xQueueSend(audio_queue, &audio, 0) != pdTRUE) return ESP_ERR_TIMEOUT;
     }
     return ESP_OK;
+}
+
+void media_session_enable_uplink(uint32_t attempt) {
+    portENTER_CRITICAL(&media_lock);
+    bool current = active && connected && attempt != 0 && attempt == session_attempt;
+    if (current) {
+        uplink_enabled = true;
+        prevoice_next_send_us = esp_timer_get_time();
+    }
+    size_t frames = prevoice_count;
+    portEXIT_CRITICAL(&media_lock);
+    if (current) ESP_LOGI(TAG, "[STREAM] browser-ready uplink enabled; preserved_frames=%u", (unsigned)frames);
 }
 
 void media_session_stop(void) {

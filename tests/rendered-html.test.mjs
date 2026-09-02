@@ -184,11 +184,12 @@ test("Hardware scenarios gate Voice on pairing and authoritative full-duplex sta
 
 test("ESP32 diagnostics expose recognition, delivery, and bounded host logging", async () => {
   const fs = await import("node:fs/promises");
-  const [pairing, firmware, speech, audio, provisioning, logger, shellFramer, boardHelper, debugTool, traceReport, flasher, scenarios, browserController] = await Promise.all([
+  const [pairing, firmware, speech, audio, commandRecognizer, provisioning, logger, shellFramer, boardHelper, debugTool, traceReport, flasher, scenarios, browserController] = await Promise.all([
     fs.readFile(new URL("../app/admin/device-pairing.tsx", import.meta.url), "utf8"),
     fs.readFile(new URL("../firmware/esp32-s3-audio/main/app_main.c", import.meta.url), "utf8"),
     fs.readFile(new URL("../firmware/esp32-s3-audio/main/speech.c", import.meta.url), "utf8"),
     fs.readFile(new URL("../firmware/esp32-s3-audio/main/board_audio.c", import.meta.url), "utf8"),
+    fs.readFile(new URL("../firmware/esp32-s3-audio/main/command_recognizer.c", import.meta.url), "utf8"),
     fs.readFile(new URL("../firmware/esp32-s3-audio/main/provisioning.c", import.meta.url), "utf8"),
     fs.readFile(new URL("../tools/esp32-serial-logger.sh", import.meta.url), "utf8"),
     fs.readFile(new URL("../tools/esp32-log-framer.sh", import.meta.url), "utf8"),
@@ -222,10 +223,25 @@ test("ESP32 diagnostics expose recognition, delivery, and bounded host logging",
   assert.match(speech, /config->se_init = false/);
   assert.match(speech, /AFE AEC initialized/);
   assert.match(speech, /AFE fetch duration/);
+  assert.match(speech, /post_session_generation/);
+  assert.match(speech, /post_session_partial_wake_rejected/);
+  assert.match(speech, /conversation_partial_wake_rejected/);
+  assert.match(speech, /WAKENET_CHANNEL_VERIFIED/);
+  assert.match(speech, /VOICE_STATE_IDLE/);
+  assert.match(speech, /VOICE_STATE_COMMAND_WINDOW/);
+  assert.match(speech, /VOICE_STATE_CONNECTING/);
+  assert.match(speech, /VOICE_STATE_CONVERSATION/);
+  assert.match(speech, /VOICE_STATE_ENDING/);
+  assert.match(speech, /hi_esp_end/);
+  assert.match(speech, /on_end_session/);
+  assert.match(speech, /speech_session_activated/);
   assert.match(audio, /feedback_generation/);
+  assert.match(audio, /set_speaker_amplifier\(false\)/);
   assert.match(audio, /board_audio_peek_levels/);
   assert.match(audio, /old tones instead of replaying them/);
   assert.match(audio, /command_listening/);
+  assert.match(commandRecognizer, /\[MULTINET\] inference=start/);
+  assert.match(commandRecognizer, /\[MULTINET\] inference=stop/);
   assert.match(provisioning, /probe_configured_gateway/);
   assert.match(provisioning, /esp_netif_str_to_ip4/);
   assert.match(provisioning, /routed private networks are valid/);
