@@ -21,7 +21,7 @@
  * a second phrase. MultiNet receives the very same AFE stream immediately
  * after WakeNet fires, so "Hi ESP Resume" can be spoken as one continuous
  * phrase; a deliberate pause is not required. */
-#define COMMAND_TAIL_TIMEOUT_MS 1800
+#define COMMAND_TAIL_TIMEOUT_MS 1200
 #define CANDIDATE_CATALOG_MAX 8192
 #define CANDIDATE_NAME_MAX 64
 #define CANDIDATE_COUNT_MAX 24
