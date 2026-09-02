@@ -1231,7 +1231,7 @@ static esp_err_t submit_device_event(
                     ESP_LOGI(TAG, "device event still processing after %d retries", attempt + 1);
                 }
                 if (attempt + 1 < DEVICE_EVENT_PROCESSING_ATTEMPTS) {
-                    vTaskDelay(pdMS_TO_TICKS(500));
+                    vTaskDelay(pdMS_TO_TICKS(200));
                     continue;
                 }
                 ESP_LOGW(TAG, "device event remained in processing state after %d retries", DEVICE_EVENT_PROCESSING_ATTEMPTS);
