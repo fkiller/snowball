@@ -14,6 +14,8 @@ import (
 	"time"
 
 	"github.com/pion/webrtc/v4"
+
+	"snowball.local/voice-gateway/devproto"
 )
 
 func TestPCMASignalDetection(t *testing.T) {
@@ -246,7 +248,7 @@ func TestPushSubscriptionAcceptsStandardShapeAndRejectsUnknownFields(t *testing.
 	}
 }
 
-func activeTestDevice(t *testing.T) (*enrollmentManager, deviceEnrollmentRequest, *ecdsa.PrivateKey) {
+func activeTestDevice(t *testing.T) (*enrollmentManager, devproto.EnrollmentRequest, *ecdsa.PrivateKey) {
 	t.Helper()
 	directory := t.TempDir()
 	manager, err := newEnrollmentManager(directory, writeTestCA(t, directory))
@@ -259,12 +261,12 @@ func activeTestDevice(t *testing.T) (*enrollmentManager, deviceEnrollmentRequest
 		t.Fatal(err)
 	}
 	nonce := "0123456789abcdefghijklmnopqrstuv"
-	digest := sha256.Sum256(enrollmentProofMessage(material.EnrollmentToken, request.HardwareID, request.PublicKeyFingerprint, nonce))
+	digest := sha256.Sum256(devproto.EnrollmentProofMessage(material.EnrollmentToken, request.HardwareID, request.PublicKeyFingerprint, nonce))
 	signature, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.complete(deviceEnrollmentProof{
+	if _, err := manager.complete(devproto.EnrollmentProof{
 		EnrollmentToken: material.EnrollmentToken, HardwareID: request.HardwareID,
 		PublicKeyFingerprint: request.PublicKeyFingerprint, Nonce: nonce,
 		Signature: base64.RawURLEncoding.EncodeToString(signature),
@@ -306,12 +308,12 @@ func TestStartVoiceDeviceEventRequiresBoundMediaAndAuthoritativeBrowserState(t *
 		peerDeviceFingerprint: device.PublicKeyFingerprint,
 		peerAudioMode:         "pcma",
 	}
-	event := deviceEventRequest{
+	event := devproto.EventRequest{
 		Version: 1, HardwareID: device.HardwareID, PublicKeyFingerprint: device.PublicKeyFingerprint,
 		BootNonce: 3, Counter: 1, Event: "command", Wake: "hi_esp", Command: "start_voice",
 		Target: "chatgpt", Confidence: 1,
 	}
-	digest := sha256.Sum256(deviceEventProofMessage(event))
+	digest := sha256.Sum256(devproto.EventProofMessage(event))
 	signature, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
 	if err != nil {
 		t.Fatal(err)
@@ -350,7 +352,7 @@ func TestStartVoiceDeviceEventRequiresBoundMediaAndAuthoritativeBrowserState(t *
 
 func TestInFlightDeviceEventReturnsProcessingWithoutRepeatingBrowserAction(t *testing.T) {
 	manager, device, key := activeTestDevice(t)
-	event := deviceEventRequest{
+	event := devproto.EventRequest{
 		Version: 1, HardwareID: device.HardwareID, PublicKeyFingerprint: device.PublicKeyFingerprint,
 		BootNonce: 21, Counter: 1, Event: "command", Wake: "hi_esp", Command: "new_chat",
 		Target: "chatgpt", Confidence: 1,

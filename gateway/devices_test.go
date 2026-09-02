@@ -17,9 +17,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"snowball.local/voice-gateway/devproto"
 )
 
-func testDeviceRequest(t *testing.T) deviceEnrollmentRequest {
+func testDeviceRequest(t *testing.T) devproto.EnrollmentRequest {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -31,18 +33,18 @@ func testDeviceRequest(t *testing.T) deviceEnrollmentRequest {
 	}
 	publicPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}))
 	digest := sha256.Sum256([]byte(publicPEM))
-	return deviceEnrollmentRequest{
+	return devproto.EnrollmentRequest{
 		Name:                 "Kitchen Speaker",
-		Model:                deviceModel,
+		Model:                devproto.Model,
 		FirmwareVersion:      "0.1.0-dev",
-		ProtocolVersion:      deviceProtocolVersion,
+		ProtocolVersion:      devproto.ProtocolVersion,
 		HardwareID:           "02:00:00:00:00:01",
 		PublicKey:            publicPEM,
 		PublicKeyFingerprint: hex.EncodeToString(digest[:]),
 	}
 }
 
-func testDeviceRequestAndKey(t *testing.T) (deviceEnrollmentRequest, *ecdsa.PrivateKey) {
+func testDeviceRequestAndKey(t *testing.T) (devproto.EnrollmentRequest, *ecdsa.PrivateKey) {
 	t.Helper()
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
@@ -54,11 +56,11 @@ func testDeviceRequestAndKey(t *testing.T) (deviceEnrollmentRequest, *ecdsa.Priv
 	}
 	publicPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der}))
 	digest := sha256.Sum256([]byte(publicPEM))
-	return deviceEnrollmentRequest{
+	return devproto.EnrollmentRequest{
 		Name:                 "Kitchen Speaker",
-		Model:                deviceModel,
+		Model:                devproto.Model,
 		FirmwareVersion:      "0.1.0-dev",
-		ProtocolVersion:      deviceProtocolVersion,
+		ProtocolVersion:      devproto.ProtocolVersion,
 		HardwareID:           "02:00:00:00:00:01",
 		PublicKey:            publicPEM,
 		PublicKeyFingerprint: hex.EncodeToString(digest[:]),
@@ -117,12 +119,12 @@ func TestEnrollmentBindsTokenAndPersistsRedactedDevice(t *testing.T) {
 		t.Fatalf("device registry permissions are not private: %v", err)
 	}
 	nonce := "0123456789abcdefghijklmnopqrstuv"
-	digest := sha256.Sum256(enrollmentProofMessage(material.EnrollmentToken, request.HardwareID, request.PublicKeyFingerprint, nonce))
+	digest := sha256.Sum256(devproto.EnrollmentProofMessage(material.EnrollmentToken, request.HardwareID, request.PublicKeyFingerprint, nonce))
 	signature, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
 	if err != nil {
 		t.Fatal(err)
 	}
-	record, err := manager.complete(deviceEnrollmentProof{
+	record, err := manager.complete(devproto.EnrollmentProof{
 		EnrollmentToken:      material.EnrollmentToken,
 		HardwareID:           request.HardwareID,
 		PublicKeyFingerprint: request.PublicKeyFingerprint,
@@ -132,7 +134,7 @@ func TestEnrollmentBindsTokenAndPersistsRedactedDevice(t *testing.T) {
 	if err != nil || record.State != "active" {
 		t.Fatalf("valid device proof failed: %#v, %v", record, err)
 	}
-	if _, err := manager.complete(deviceEnrollmentProof{
+	if _, err := manager.complete(devproto.EnrollmentProof{
 		EnrollmentToken:      material.EnrollmentToken,
 		HardwareID:           request.HardwareID,
 		PublicKeyFingerprint: request.PublicKeyFingerprint,
@@ -156,9 +158,9 @@ func containsSensitiveDeviceValue(raw string, values ...string) bool {
 	return false
 }
 
-func signTestDeviceEvent(t *testing.T, event *deviceEventRequest, key *ecdsa.PrivateKey) {
+func signTestDeviceEvent(t *testing.T, event *devproto.EventRequest, key *ecdsa.PrivateKey) {
 	t.Helper()
-	digest := sha256.Sum256(deviceEventProofMessage(*event))
+	digest := sha256.Sum256(devproto.EventProofMessage(*event))
 	signature, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
 	if err != nil {
 		t.Fatal(err)
@@ -166,7 +168,7 @@ func signTestDeviceEvent(t *testing.T, event *deviceEventRequest, key *ecdsa.Pri
 	event.Signature = base64.RawURLEncoding.EncodeToString(signature)
 }
 
-func activeDeviceManagerForReceipt(t *testing.T) (*enrollmentManager, deviceEnrollmentRequest, *ecdsa.PrivateKey, string) {
+func activeDeviceManagerForReceipt(t *testing.T) (*enrollmentManager, devproto.EnrollmentRequest, *ecdsa.PrivateKey, string) {
 	t.Helper()
 	directory := t.TempDir()
 	manager, err := newEnrollmentManager(directory, writeTestCA(t, directory))
@@ -179,12 +181,12 @@ func activeDeviceManagerForReceipt(t *testing.T) (*enrollmentManager, deviceEnro
 		t.Fatal(err)
 	}
 	nonce := "0123456789abcdefghijklmnopqrstuv"
-	digest := sha256.Sum256(enrollmentProofMessage(material.EnrollmentToken, request.HardwareID, request.PublicKeyFingerprint, nonce))
+	digest := sha256.Sum256(devproto.EnrollmentProofMessage(material.EnrollmentToken, request.HardwareID, request.PublicKeyFingerprint, nonce))
 	signature, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.complete(deviceEnrollmentProof{
+	if _, err := manager.complete(devproto.EnrollmentProof{
 		EnrollmentToken: material.EnrollmentToken, HardwareID: request.HardwareID,
 		PublicKeyFingerprint: request.PublicKeyFingerprint, Nonce: nonce,
 		Signature: base64.RawURLEncoding.EncodeToString(signature),
@@ -197,33 +199,33 @@ func activeDeviceManagerForReceipt(t *testing.T) (*enrollmentManager, deviceEnro
 func TestEnrollmentRejectsMismatchedFingerprintAndUnsupportedBoard(t *testing.T) {
 	request := testDeviceRequest(t)
 	request.PublicKeyFingerprint = string(make([]byte, 64))
-	if err := validateDeviceEnrollment(&request); err == nil {
+	if err := devproto.ValidateEnrollment(&request); err == nil {
 		t.Fatal("mismatched public key fingerprint was accepted")
 	}
 	request = testDeviceRequest(t)
 	request.Model = "Unknown Board"
-	if err := validateDeviceEnrollment(&request); err == nil {
+	if err := devproto.ValidateEnrollment(&request); err == nil {
 		t.Fatal("unsupported hardware was accepted")
 	}
 }
 
 func TestDeviceEventValidationRequiresWakeAndCommandNames(t *testing.T) {
-	valid := deviceEventRequest{
+	valid := devproto.EventRequest{
 		Version: 1, HardwareID: "02:00:00:00:00:01", PublicKeyFingerprint: strings.Repeat("a", 64),
 		BootNonce: 1, Counter: 1, Event: "command", Wake: "hi_esp", Command: "project",
 		Target: "chatgpt", Name: "Snowball", Confidence: 0.9, Signature: strings.Repeat("A", 64),
 	}
-	if err := validateDeviceEvent(&valid); err != nil {
+	if err := devproto.ValidateEvent(&valid); err != nil {
 		t.Fatalf("valid project event rejected: %v", err)
 	}
-	tests := map[string]func(*deviceEventRequest){
-		"missing command wake": func(event *deviceEventRequest) { event.Wake = "" },
-		"wrong command wake":   func(event *deviceEventRequest) { event.Wake = "chatgpt" },
-		"missing project name": func(event *deviceEventRequest) { event.Name = "" },
-		"missing voice name": func(event *deviceEventRequest) {
+	tests := map[string]func(*devproto.EventRequest){
+		"missing command wake": func(event *devproto.EventRequest) { event.Wake = "" },
+		"wrong command wake":   func(event *devproto.EventRequest) { event.Wake = "chatgpt" },
+		"missing project name": func(event *devproto.EventRequest) { event.Name = "" },
+		"missing voice name": func(event *devproto.EventRequest) {
 			event.Command, event.Name = "voice", ""
 		},
-		"wake with command fields": func(event *deviceEventRequest) {
+		"wake with command fields": func(event *devproto.EventRequest) {
 			event.Event = "wake"
 		},
 	}
@@ -231,7 +233,7 @@ func TestDeviceEventValidationRequiresWakeAndCommandNames(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			event := valid
 			mutate(&event)
-			if err := validateDeviceEvent(&event); err == nil {
+			if err := devproto.ValidateEvent(&event); err == nil {
 				t.Fatal("invalid device event was accepted")
 			}
 		})
@@ -239,23 +241,23 @@ func TestDeviceEventValidationRequiresWakeAndCommandNames(t *testing.T) {
 }
 
 func TestDeviceCandidateSyncValidation(t *testing.T) {
-	valid := deviceEventRequest{
+	valid := devproto.EventRequest{
 		Version: 1, HardwareID: "02:00:00:00:00:01", PublicKeyFingerprint: strings.Repeat("a", 64),
 		BootNonce: 1, Counter: 1, Event: "sync", Confidence: 0, Signature: strings.Repeat("A", 64),
 	}
-	if err := validateDeviceEvent(&valid); err != nil {
+	if err := devproto.ValidateEvent(&valid); err != nil {
 		t.Fatalf("valid candidate sync event rejected: %v", err)
 	}
-	for name, mutate := range map[string]func(*deviceEventRequest){
-		"wake":    func(event *deviceEventRequest) { event.Wake = "hi_esp" },
-		"command": func(event *deviceEventRequest) { event.Command = "resume" },
-		"target":  func(event *deviceEventRequest) { event.Target = "chatgpt" },
-		"name":    func(event *deviceEventRequest) { event.Name = "Snowball" },
+	for name, mutate := range map[string]func(*devproto.EventRequest){
+		"wake":    func(event *devproto.EventRequest) { event.Wake = "hi_esp" },
+		"command": func(event *devproto.EventRequest) { event.Command = "resume" },
+		"target":  func(event *devproto.EventRequest) { event.Target = "chatgpt" },
+		"name":    func(event *devproto.EventRequest) { event.Name = "Snowball" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			event := valid
 			mutate(&event)
-			if err := validateDeviceEvent(&event); err == nil {
+			if err := devproto.ValidateEvent(&event); err == nil {
 				t.Fatal("candidate sync event with command fields was accepted")
 			}
 		})
@@ -273,7 +275,7 @@ func TestDeviceEventResultIsIdempotentAndSurvivesRestart(t *testing.T) {
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			manager, device, key, directory := activeDeviceManagerForReceipt(t)
-			event := deviceEventRequest{
+			event := devproto.EventRequest{
 				Version: 1, HardwareID: device.HardwareID, PublicKeyFingerprint: device.PublicKeyFingerprint,
 				BootNonce: 17, Counter: 1, Event: "command", Wake: "hi_esp", Command: "new_chat",
 				Target: "chatgpt", Confidence: 1,
@@ -340,24 +342,24 @@ func TestDeviceEventAuthenticationAndReplayCursor(t *testing.T) {
 		t.Fatal(err)
 	}
 	nonce := "0123456789abcdefghijklmnopqrstuv"
-	digest := sha256.Sum256(enrollmentProofMessage(material.EnrollmentToken, request.HardwareID, request.PublicKeyFingerprint, nonce))
+	digest := sha256.Sum256(devproto.EnrollmentProofMessage(material.EnrollmentToken, request.HardwareID, request.PublicKeyFingerprint, nonce))
 	signature, err := ecdsa.SignASN1(rand.Reader, key, digest[:])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.complete(deviceEnrollmentProof{
+	if _, err := manager.complete(devproto.EnrollmentProof{
 		EnrollmentToken: material.EnrollmentToken, HardwareID: request.HardwareID,
 		PublicKeyFingerprint: request.PublicKeyFingerprint, Nonce: nonce,
 		Signature: base64.RawURLEncoding.EncodeToString(signature),
 	}); err != nil {
 		t.Fatal(err)
 	}
-	event := deviceEventRequest{
+	event := devproto.EventRequest{
 		Version: 1, HardwareID: request.HardwareID, PublicKeyFingerprint: request.PublicKeyFingerprint,
 		BootNonce: 7, Counter: 1, Event: "command", Wake: "hi_esp", Command: "new_chat",
 		Target: "chatgpt", Confidence: 1,
 	}
-	eventDigest := sha256.Sum256(deviceEventProofMessage(event))
+	eventDigest := sha256.Sum256(devproto.EventProofMessage(event))
 	eventSignature, err := ecdsa.SignASN1(rand.Reader, key, eventDigest[:])
 	if err != nil {
 		t.Fatal(err)
@@ -370,7 +372,7 @@ func TestDeviceEventAuthenticationAndReplayCursor(t *testing.T) {
 		t.Fatal("replayed device event was accepted")
 	}
 	event.Counter = 2
-	eventDigest = sha256.Sum256(deviceEventProofMessage(event))
+	eventDigest = sha256.Sum256(devproto.EventProofMessage(event))
 	eventSignature, err = ecdsa.SignASN1(rand.Reader, key, eventDigest[:])
 	if err != nil {
 		t.Fatal(err)
@@ -383,7 +385,7 @@ func TestDeviceEventAuthenticationAndReplayCursor(t *testing.T) {
 	// the older boot must never become valid again afterwards.
 	event.BootNonce = 8
 	event.Counter = 1
-	eventDigest = sha256.Sum256(deviceEventProofMessage(event))
+	eventDigest = sha256.Sum256(devproto.EventProofMessage(event))
 	eventSignature, err = ecdsa.SignASN1(rand.Reader, key, eventDigest[:])
 	if err != nil {
 		t.Fatal(err)
@@ -394,7 +396,7 @@ func TestDeviceEventAuthenticationAndReplayCursor(t *testing.T) {
 	}
 	event.BootNonce = 7
 	event.Counter = 3
-	eventDigest = sha256.Sum256(deviceEventProofMessage(event))
+	eventDigest = sha256.Sum256(devproto.EventProofMessage(event))
 	eventSignature, err = ecdsa.SignASN1(rand.Reader, key, eventDigest[:])
 	if err != nil {
 		t.Fatal(err)
@@ -417,12 +419,12 @@ func TestDeviceMediaOfferAuthenticationAndSharedReplayCursor(t *testing.T) {
 		t.Fatal(err)
 	}
 	nonce := "0123456789abcdefghijklmnopqrstuv"
-	enrollmentDigest := sha256.Sum256(enrollmentProofMessage(material.EnrollmentToken, request.HardwareID, request.PublicKeyFingerprint, nonce))
+	enrollmentDigest := sha256.Sum256(devproto.EnrollmentProofMessage(material.EnrollmentToken, request.HardwareID, request.PublicKeyFingerprint, nonce))
 	enrollmentSignature, err := ecdsa.SignASN1(rand.Reader, key, enrollmentDigest[:])
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := manager.complete(deviceEnrollmentProof{
+	if _, err := manager.complete(devproto.EnrollmentProof{
 		EnrollmentToken: material.EnrollmentToken, HardwareID: request.HardwareID,
 		PublicKeyFingerprint: request.PublicKeyFingerprint, Nonce: nonce,
 		Signature: base64.RawURLEncoding.EncodeToString(enrollmentSignature),
@@ -430,12 +432,12 @@ func TestDeviceMediaOfferAuthenticationAndSharedReplayCursor(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	offer := deviceMediaOfferRequest{
+	offer := devproto.MediaOfferRequest{
 		Version: 1, HardwareID: request.HardwareID, PublicKeyFingerprint: request.PublicKeyFingerprint,
 		BootNonce: 11, Counter: 1, Type: "offer",
 		SDP: "v=0\r\no=- 1 1 IN IP4 192.168.1.20\r\ns=Snowball speaker\r\nt=0 0\r\na=group:BUNDLE 0\r\nm=audio 9 UDP/TLS/RTP/SAVPF 8\r\nc=IN IP4 0.0.0.0\r\na=mid:0\r\na=rtpmap:8 PCMA/8000\r\na=sendrecv\r\na=ice-ufrag:snowball\r\na=ice-pwd:0123456789abcdefghijklmn\r\n",
 	}
-	offerDigest := sha256.Sum256(deviceMediaOfferProofMessage(offer))
+	offerDigest := sha256.Sum256(devproto.MediaOfferProofMessage(offer))
 	offerSignature, err := ecdsa.SignASN1(rand.Reader, key, offerDigest[:])
 	if err != nil {
 		t.Fatal(err)
@@ -452,12 +454,12 @@ func TestDeviceMediaOfferAuthenticationAndSharedReplayCursor(t *testing.T) {
 	}
 
 	// Event and media signaling share one monotonically increasing cursor.
-	event := deviceEventRequest{
+	event := devproto.EventRequest{
 		Version: 1, HardwareID: request.HardwareID, PublicKeyFingerprint: request.PublicKeyFingerprint,
 		BootNonce: 11, Counter: 2, Event: "command", Wake: "hi_esp", Command: "start_voice",
 		Target: "chatgpt", Confidence: 1,
 	}
-	eventDigest := sha256.Sum256(deviceEventProofMessage(event))
+	eventDigest := sha256.Sum256(devproto.EventProofMessage(event))
 	eventSignature, err := ecdsa.SignASN1(rand.Reader, key, eventDigest[:])
 	if err != nil {
 		t.Fatal(err)

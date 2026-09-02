@@ -116,7 +116,7 @@ test("ChatGPT project discovery supports the current semantic sidebar rows", asy
 test("Gateway candidate and project capability responses are explicit", async () => {
   const [gateway, devices] = await Promise.all([
     import("node:fs/promises").then((fs) => fs.readFile(new URL("../gateway/main.go", import.meta.url), "utf8")),
-    import("node:fs/promises").then((fs) => fs.readFile(new URL("../gateway/devices.go", import.meta.url), "utf8")),
+    import("node:fs/promises").then((fs) => fs.readFile(new URL("../gateway/devproto/validate.go", import.meta.url), "utf8")),
   ]);
   assert.match(gateway, /GET \/api\/candidates/);
   assert.match(gateway, /candidates_synchronized/);
@@ -153,13 +153,14 @@ test("USB provisioning stays in the authenticated browser boundary", async () =>
 
 test("Device control events require signed replay-protected authentication", async () => {
   const fs = await import("node:fs/promises");
-  const [devices, gateway, firmware, roadmap] = await Promise.all([
+  const [devices, devproto, gateway, firmware, roadmap] = await Promise.all([
     fs.readFile(new URL("../gateway/devices.go", import.meta.url), "utf8"),
+    fs.readFile(new URL("../gateway/devproto/types.go", import.meta.url), "utf8"),
     fs.readFile(new URL("../gateway/main.go", import.meta.url), "utf8"),
     fs.readFile(new URL("../firmware/esp32-s3-audio/main/provisioning.c", import.meta.url), "utf8"),
     fs.readFile(new URL("../docs/ROADMAP.md", import.meta.url), "utf8"),
   ]);
-  assert.match(devices, /snowball-device-event-v1/);
+  assert.match(devproto, /snowball-device-event-v1/);
   assert.match(devices, /device event replay rejected/);
   assert.match(gateway, /POST \/api\/device\/events/);
   assert.match(gateway, /device_command_processing/);

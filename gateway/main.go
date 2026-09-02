@@ -27,6 +27,8 @@ import (
 	"github.com/pion/interceptor"
 	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
+
+	"snowball.local/voice-gateway/devproto"
 )
 
 type config struct {
@@ -482,7 +484,7 @@ func (g *gateway) handleOffer(w http.ResponseWriter, r *http.Request) {
 
 func (g *gateway) handleDeviceMediaOffer(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
-	var input deviceMediaOfferRequest
+	var input devproto.MediaOfferRequest
 	if err := decodeJSONBody(w, r, 128<<10, &input); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid device media offer")
 		return
@@ -1439,7 +1441,7 @@ func (g *gateway) handleCandidates(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (g *gateway) handleDeviceEnrollment(w http.ResponseWriter, r *http.Request) {
-	var input deviceEnrollmentRequest
+	var input devproto.EnrollmentRequest
 	if err := decodeJSONBody(w, r, 8<<10, &input); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid device enrollment request")
 		return
@@ -1454,7 +1456,7 @@ func (g *gateway) handleDeviceEnrollment(w http.ResponseWriter, r *http.Request)
 }
 
 func (g *gateway) handleDeviceEnrollmentProof(w http.ResponseWriter, r *http.Request) {
-	var input deviceEnrollmentProof
+	var input devproto.EnrollmentProof
 	if err := decodeJSONBody(w, r, 4<<10, &input); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid device enrollment proof")
 		return
@@ -1492,8 +1494,8 @@ func projectDeviceCapability(target string) (string, string) {
 	}
 }
 
-func deviceDispatchKey(input deviceEventRequest) string {
-	digest := sha256.Sum256(deviceEventProofMessage(input))
+func deviceDispatchKey(input devproto.EventRequest) string {
+	digest := sha256.Sum256(devproto.EventProofMessage(input))
 	return hex.EncodeToString(digest[:])
 }
 
@@ -1502,7 +1504,7 @@ func deviceDispatchKey(input deviceEventRequest) string {
 // navigation and Voice startup, and retries the same signed envelope until
 // completeEvent stores the terminal result. Only one browser transaction is
 // admitted at a time; the replay proof prevents duplicate work on retries.
-func (g *gateway) scheduleDeviceDispatch(input deviceEventRequest, deviceName string) (bool, bool) {
+func (g *gateway) scheduleDeviceDispatch(input devproto.EventRequest, deviceName string) (bool, bool) {
 	key := deviceDispatchKey(input)
 	g.deviceDispatchMu.Lock()
 	if g.deviceDispatchSem == nil {
@@ -1535,7 +1537,7 @@ func (g *gateway) scheduleDeviceDispatch(input deviceEventRequest, deviceName st
 	return true, false
 }
 
-func (g *gateway) dispatchDeviceCommand(input deviceEventRequest, deviceName string) {
+func (g *gateway) dispatchDeviceCommand(input devproto.EventRequest, deviceName string) {
 	started := time.Now()
 	log.Printf(
 		"device command dispatch started device=%s command=%s target=%s",
@@ -1655,7 +1657,7 @@ func (g *gateway) dispatchDeviceCommand(input deviceEventRequest, deviceName str
 	log.Printf("device command dispatched command=%s outcome=%s elapsed=%s", input.Command, result["outcome"], time.Since(started).Round(time.Millisecond))
 }
 
-func (g *gateway) deviceCandidateSyncResult(input deviceEventRequest, deviceName string) (int, []byte) {
+func (g *gateway) deviceCandidateSyncResult(input devproto.EventRequest, deviceName string) (int, []byte) {
 	result := map[string]any{
 		"version":  1,
 		"accepted": true,
@@ -1689,7 +1691,7 @@ func (g *gateway) handleDeviceEvent(w http.ResponseWriter, r *http.Request) {
 	// the board authenticates with its enrolled P-256 key and a replay cursor.
 	// It is still deny-by-default because acceptEvent verifies identity, state,
 	// signature, and counter before anything is returned as accepted.
-	var input deviceEventRequest
+	var input devproto.EventRequest
 	if err := decodeJSONBody(w, r, 8<<10, &input); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid device event")
 		return
