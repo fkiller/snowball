@@ -395,6 +395,9 @@ async function stopVoice() {
   if (!current.voiceActive) {
     if (current.state === "ready" && current.voiceButtonPresent) {
       lastError = "";
+      setTimeout(() => {
+        serializeBrowserOperation(warmIdleChat).catch(() => undefined);
+      }, 100);
       return current;
     }
     throw new Error(current.reason || "ChatGPT Voice idle state could not be confirmed.");
@@ -410,6 +413,9 @@ async function stopVoice() {
       idleObservations += 1;
       if (idleObservations >= 2) {
         lastError = "";
+        setTimeout(() => {
+          serializeBrowserOperation(warmIdleChat).catch(() => undefined);
+        }, 100);
         return next;
       }
     } else {
@@ -435,6 +441,18 @@ async function waitForIdleVoicePage(label, timeout = 10_000) {
     await page?.waitForTimeout(250);
   }
   throw new Error(`${label}: ${latest?.reason || "ChatGPT did not expose a stable idle Voice page."}`);
+}
+
+async function warmIdleChat() {
+  if (!page) return;
+  const current = await inspectBrowser();
+  if (current.voiceActive || !current.authenticated || current.state !== "ready" || freshChatUrl(current.url)) {
+    return current;
+  }
+  const previousConversation = conversationUrl(page.url());
+  if (previousConversation) lastConversationUrl = previousConversation;
+  await page.goto(targetUrl, { waitUntil: "domcontentloaded", timeout: 30_000 });
+  return waitForIdleVoicePage("Background warm chat");
 }
 
 async function navigateNewChat() {
@@ -950,6 +968,7 @@ async function connectBrowser() {
   await inspectBrowser();
   await recoverFrontendLoginShell();
   await inspectBrowser();
+  serializeBrowserOperation(warmIdleChat).catch(() => undefined);
 }
 
 function sendJson(response, statusCode, value) {
