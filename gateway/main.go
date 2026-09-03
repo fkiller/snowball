@@ -92,7 +92,7 @@ type pushKeys struct {
 const (
 	browserMediaActivePath = "/tmp/snowball-browser-media.active"
 	deviceMediaActivePath  = "/tmp/snowball-device-media.active"
-	deviceAudioStallAfter  = 45 * time.Second
+	deviceAudioStallAfter  = 120 * time.Second
 	voiceRecoveryCooldown  = 2 * time.Minute
 	// Two consecutive authoritative inactive observations remain the debounce
 	// gate. Poll at one second so a normal Bye cannot leave a live device peer
@@ -1742,7 +1742,7 @@ func (g *gateway) handleDeviceEvent(w http.ResponseWriter, r *http.Request) {
 				})
 				return
 			}
-			if done != nil {
+			if done != nil && (strings.Contains(r.UserAgent(), "ESP32") || r.Header.Get("X-Snowball-Wait") == "true") {
 				select {
 				case <-done:
 					if res, ok := g.enrollment.getEventResult(input); ok {
@@ -1837,7 +1837,7 @@ func (g *gateway) handleDeviceEvent(w http.ResponseWriter, r *http.Request) {
 				writeDeviceResult(http.StatusServiceUnavailable, result)
 				return
 			}
-			if done != nil {
+			if done != nil && (strings.Contains(r.UserAgent(), "ESP32") || r.Header.Get("X-Snowball-Wait") == "true") {
 				select {
 				case <-done:
 					if res, ok := g.enrollment.getEventResult(input); ok {

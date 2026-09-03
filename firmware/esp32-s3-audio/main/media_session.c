@@ -77,6 +77,7 @@ typedef struct {
 } encoded_audio_t;
 
 static encoded_audio_t *prevoice_frames;
+static uint32_t uplink_sample_pts;
 
 static uint8_t linear_to_alaw(int16_t sample) {
     static const uint16_t segment_end[8] = {
@@ -488,6 +489,7 @@ esp_err_t media_session_start(uint32_t boot_nonce, uint32_t offer_counter, uint3
     prevoice_read = 0;
     uplink_enabled = false;
     prevoice_next_send_us = 0;
+    uplink_sample_pts = 0;
     portEXIT_CRITICAL(&media_lock);
     xQueueReset(audio_queue);
     if (xTaskCreate(media_task, "snowball_media", 16384, NULL, 6, &media_task_handle) != pdPASS) {
@@ -506,7 +508,8 @@ esp_err_t media_session_push_pcm16k(const int16_t *samples, size_t sample_count)
     size_t source = 0;
     while (source + 1 < sample_count) {
         encoded_audio_t audio = {
-            .pts = (uint32_t)(esp_timer_get_time() / 1000),
+            .pts = 0,
+            .size = 0,
         };
         while (source + 1 < sample_count && audio.size < MEDIA_AUDIO_SAMPLES_MAX) {
             int32_t averaged = ((int32_t)samples[source] + (int32_t)samples[source + 1]) / 2;
@@ -514,6 +517,8 @@ esp_err_t media_session_push_pcm16k(const int16_t *samples, size_t sample_count)
             source += 2;
         }
         portENTER_CRITICAL(&media_lock);
+        audio.pts = uplink_sample_pts;
+        uplink_sample_pts += (uint32_t)audio.size;
         bool hold_for_voice = !uplink_enabled;
         if (hold_for_voice && prevoice_count < MEDIA_PREVOICE_FRAME_CAPACITY) {
             prevoice_frames[prevoice_count++] = audio;
