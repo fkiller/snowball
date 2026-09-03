@@ -343,8 +343,7 @@ static void detect_task(void *argument) {
         }
 
         bool feedback_busy = board_audio_feedback_busy() ||
-            (state != VOICE_STATE_CONVERSATION && board_audio_stream_active()) ||
-            (state == VOICE_STATE_CONVERSATION && (esp_timer_get_time() - conversation_start_time_us) < 5000000LL);
+            (state != VOICE_STATE_CONVERSATION && board_audio_stream_active());
         if (feedback_busy) {
             if (wakenet_enabled) {
                 afe->disable_wakenet(afe_data);
@@ -482,6 +481,16 @@ static void detect_task(void *argument) {
             continue;
         }
         if (detected) {
+            if (state == VOICE_STATE_CONVERSATION) {
+                int64_t elapsed_us = esp_timer_get_time() - conversation_start_time_us;
+                if (elapsed_us < 5000000LL) {
+                    ESP_LOGI(TAG, "[WAKENET] Hi ESP ignored during initial conversation grace window (%" PRId64 " ms)",
+                             elapsed_us / 1000);
+                    esp_task_wdt_reset();
+                    vTaskDelay(1);
+                    continue;
+                }
+            }
             afe->disable_wakenet(afe_data);
             wakenet_enabled = false;
             reset_before_rearm = true;

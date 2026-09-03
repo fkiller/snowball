@@ -408,6 +408,59 @@ These rules apply to every change in this repository.
 - Keep user-facing prompt text and command aliases in the versioned settings resources, not scattered through automation code.
 - Explicit `Codex Project` commands take Codex precedence; plain `Project` commands target ChatGPT even when names collide.
 
+## Operating Environments & Remote Router Access
+
+Snowball development spans two environments: the local development workstation (often Windows) and the target ARM64 router host.
+
+### Router Host (`192.168.1.1`)
+
+- **Host**: `SNOWBALL-ROUTER` (FriendlyWrt/OpenWrt ARM64, Linux 5.10).
+- **SSH access**: `ssh root@192.168.1.1` authenticated via local key (`~/.ssh/id_ed25519`).
+- **Dedicated Docker socket**: The isolated Docker daemon listens on `unix:///var/run/snowball-voice-docker.sock`. Always specify this socket when invoking docker commands on the router:
+  ```bash
+  docker -H unix:///var/run/snowball-voice-docker.sock ps
+  ```
+- **Live production container**: `snowball-voice` (mounts `/data`). Do not restart, replace, or stop without explicit user approval.
+- **Router repository path**: `/root/snowball-voice`. Ensure changes are synced before triggering remote builds or deployments.
+- **Safe deployment**: Use `tools/deploy-candidate.sh` with `SNOWBALL_DEPLOY_APPROVAL=YES`.
+
+### Windows Workstation Verification
+
+When working locally on Windows where Docker Desktop or POSIX shell syntax may not be available:
+
+```powershell
+# Frontend lint, build, and tests
+npm run lint
+$env:WRANGLER_LOG_PATH='.wrangler/wrangler.log'
+npx vinext build
+node --test tests/*.test.mjs
+
+# Gateway, emulator, and devproto checks
+Push-Location gateway
+go vet ./...
+go test ./...
+Pop-Location
+```
+
+Linux-only gates (`go test -race`, Docker image build) can be offloaded directly to the router via SSH:
+
+```bash
+ssh root@192.168.1.1 "cd /root/snowball-voice && docker -H unix:///var/run/snowball-voice-docker.sock build --network host -t snowball-voice:test ."
+```
+
+### Firmware Flashing Targets
+
+- **Attached to Windows workstation**:
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File tools/flash-esp32-windows.ps1
+  ```
+- **Attached to Router USB (`/dev/ttyACM0`)**:
+  ```bash
+  /root/snowball-voice/tools/flash-esp32.sh
+  ```
+  (The router script stops the `snowball-esp32-debug` background collector before flashing and restarts it afterward).
+- **Critical rule**: Never flash NVS partition at `0x9000` on either path; NVS contains Wi-Fi credentials, enrollment tokens, and device P-256 keys.
+
 ## Required verification
 
 Run these checks for every relevant change:
@@ -422,3 +475,4 @@ docker build --network host -t snowball-voice:test .
 ```
 
 Security-sensitive changes also require authentication, CSRF, origin, settings-validation, and nginx console-gate tests. Do not bypass a failing gate to publish an image.
+

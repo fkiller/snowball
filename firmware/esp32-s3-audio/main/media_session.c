@@ -274,7 +274,7 @@ static void media_task(void *argument) {
             .audio_recv_jitter = {
                 .cache_timeout = 120,
                 .resend_delay = 40,
-                .cache_size = 16384,
+                .cache_size = 8192,
             },
             .send_pool_size = 8192,
             .send_queue_num = 32,
