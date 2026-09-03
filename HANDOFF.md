@@ -17,7 +17,7 @@ The active objective:
 
 ### Git State
 - **Branch**: `codex/fix-post-bye-ghost-wake` (pushed to router remote as `codex/fast-voice-candidate`)
-- **Latest Commit**: `068833d perf: trigger speculative voice pre-warm on device media offer`
+- **Latest Commit**: `1344f48 fix(audio): eliminate voice breakup via 20ms GStreamer framing, disabling Wi-Fi power save, and tuning jitter buffer`
 - **Clean working tree**: All changes committed and verified.
 
 ### Completed Work Since Initial Handoff
@@ -29,15 +29,21 @@ The active objective:
    - `gateway/main.go`:
      - Added `speculativePrewarmVoice` triggered instantly upon accepting the WebRTC media offer (`POST /api/device/webrtc/offer`), launching `/voice/resume` in Chromium in the background at $t = 0.2\text{s}$ while the ESP32 performs MultiNet tail detection and DTLS handshake.
      - Added fast long-polling wait (up to 1500ms) on `scheduleDeviceDispatch` done channel in `handleDeviceEvent`, returning `HTTP 200 OK` (`outcome: "executed"`) immediately on first request and eliminating the 500ms client sleep loop.
+     - Increased UDP socket read/write buffers on `iceConn` (1MB) and `deviceDownConn` (512KB) to eliminate socket receive buffer overruns.
    - `gateway/devices.go`: Added `getEventResult` to fetch completed event records atomically.
-3. **Browser Controller Mutation Observation**:
+3. **Audio Quality & Voice Breakup Elimination**:
+   - `container/start-gst-device-downlink.sh`: Increased `pulsesrc` buffer to 200ms (`buffer-time=200000 latency-time=20000`) and enforced standard 20ms RTP packetization (`min-ptime=20000000 max-ptime=20000000` on `rtppcmapay`). Cut network packet rate from 200 pps (5ms micro-packets) to 50 pps (20ms standard frames), eliminating scheduling starvation.
+   - `firmware/esp32-s3-audio/main/provisioning.c`: Disabled Wi-Fi power saving (`esp_wifi_set_ps(WIFI_PS_NONE)`). Eliminated recurring Wi-Fi modem sleep and beacon timeouts (`wifi:bcn_timeout`).
+   - `firmware/esp32-s3-audio/main/media_session.c`: Tuned `esp_peer` jitter buffer (`cache_timeout = 120ms`, `resend_delay = 40ms`, `cache_size = 16384`) to absorb network jitter without declaring packet loss.
+   - Rebuilt firmware with ESP-IDF 5.5.5 and flashed to `COM3`.
+4. **Browser Controller Mutation Observation**:
    - `services/browser-controller.mjs`:
      - Replaced heavy DOM inspection loop in `startVoice()` and `stopVoice()` with Playwright's native `waitForSelector` (<20ms).
      - Made `resumeVoice()` resilient: does not error on fresh chat URLs (`https://chatgpt.com/`), returns immediately if Voice is already active.
-4. **Production Deployment to FriendlyWrt Router**:
+5. **Production Deployment to FriendlyWrt Router**:
    - Built candidate image `snowball-voice:candidate-fast` on `SNOWBALL-ROUTER` (`192.168.1.1`).
-   - Successfully deployed to production container `snowball-voice` using `tools/deploy-candidate.sh` with image tag `snowball-voice:0.3.3-fast`.
-   - Preserved rollback container `snowball-voice-rollback-20260903T000605Z`.
+   - Successfully deployed to production container `snowball-voice` using `tools/deploy-candidate.sh` with image tag `snowball-voice:0.3.4-fast`.
+   - Preserved rollback container `snowball-voice-rollback-20260903T022209Z`.
    - All post-deploy healthchecks passed (`health: {"ok":true}`, `auth: {"setupRequired":false}`, `admin: 200`, `console: 401`, `ChatGPT: state "ready", authenticated: true`).
 
 ### Operating Environments & Connectivity
