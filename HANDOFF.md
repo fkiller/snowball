@@ -17,7 +17,7 @@ The active objective:
 
 ### Git State
 - **Branch**: `codex/fix-post-bye-ghost-wake` (pushed to router remote as `codex/fast-voice-candidate`)
-- **Latest Commit**: `a90273b perf: optimize voice session latency via speculative pre-warm and fast long-polling`
+- **Latest Commit**: `068833d perf: trigger speculative voice pre-warm on device media offer`
 - **Clean working tree**: All changes committed and verified.
 
 ### Completed Work Since Initial Handoff
@@ -27,7 +27,7 @@ The active objective:
    - Built and flashed live to `COM3` via `tools/flash-esp32-windows.ps1` (NVS `0x9000` untouched).
 2. **Gateway Speculative Pre-Warming & Fast Long-Polling**:
    - `gateway/main.go`:
-     - Added `speculativePrewarmVoice` triggered instantly when `event: "wake"` arrives from enrolled device, launching `/voice/resume` in the background in parallel with WebRTC connection.
+     - Added `speculativePrewarmVoice` triggered instantly upon accepting the WebRTC media offer (`POST /api/device/webrtc/offer`), launching `/voice/resume` in Chromium in the background at $t = 0.2\text{s}$ while the ESP32 performs MultiNet tail detection and DTLS handshake.
      - Added fast long-polling wait (up to 1500ms) on `scheduleDeviceDispatch` done channel in `handleDeviceEvent`, returning `HTTP 200 OK` (`outcome: "executed"`) immediately on first request and eliminating the 500ms client sleep loop.
    - `gateway/devices.go`: Added `getEventResult` to fetch completed event records atomically.
 3. **Browser Controller Mutation Observation**:
@@ -36,8 +36,8 @@ The active objective:
      - Made `resumeVoice()` resilient: does not error on fresh chat URLs (`https://chatgpt.com/`), returns immediately if Voice is already active.
 4. **Production Deployment to FriendlyWrt Router**:
    - Built candidate image `snowball-voice:candidate-fast` on `SNOWBALL-ROUTER` (`192.168.1.1`).
-   - Successfully deployed to production container `snowball-voice` using `tools/deploy-candidate.sh` with image tag `snowball-voice:0.3.2-fast`.
-   - Preserved rollback container `snowball-voice-rollback-20260902T232643Z`.
+   - Successfully deployed to production container `snowball-voice` using `tools/deploy-candidate.sh` with image tag `snowball-voice:0.3.3-fast`.
+   - Preserved rollback container `snowball-voice-rollback-20260903T000605Z`.
    - All post-deploy healthchecks passed (`health: {"ok":true}`, `auth: {"setupRequired":false}`, `admin: 200`, `console: 401`, `ChatGPT: state "ready", authenticated: true`).
 
 ### Operating Environments & Connectivity
