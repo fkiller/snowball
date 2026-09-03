@@ -517,6 +517,7 @@ func (g *gateway) handleDeviceMediaOffer(w http.ResponseWriter, r *http.Request)
 		clientAddress(r),
 		time.Since(started).Round(time.Millisecond),
 	)
+	go g.speculativePrewarmVoice(record.PublicKeyFingerprint)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"version": 1,
 		"type":    "answer",
