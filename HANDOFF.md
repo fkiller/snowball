@@ -2,7 +2,7 @@
 
 ## Status
 
-**Handoff state: READY** (Updated 2026-09-02 EDT)
+**Handoff state: READY** (Updated 2026-09-03 EDT)
 
 This handoff reflects the current repository state across the local Windows development workstation and the live `SNOWBALL-ROUTER` host (`192.168.1.1`).
 
@@ -11,46 +11,45 @@ This handoff reflects the current repository state across the local Windows deve
 Snowball is a LAN-only voice terminal pairing an ESP32-S3 audio speaker with a persistent ChatGPT Web session running in headed Chromium inside a container on an ARM64 OpenWrt home router (`192.168.1.1`).
 
 The active objective:
-- Minimize the end-to-end voice activation delay down to ~1.0–1.2s through parallelized wake pre-warming and fast long-polling, while eliminating false wake cutoffs.
+- Ensure 100% reliable, crystal-clear bi-directional conversation with ChatGPT without audio packet drops, recognition failures, or premature session cutoffs.
 
 ## Current Repository & Operational State
 
 ### Git State
-- **Branch**: `codex/fix-post-bye-ghost-wake` (pushed to router remote as `codex/fast-voice-candidate`)
-- **Latest Commit**: `7565bea fix(firmware): prevent AFE race crash and tune jitter buffer`
+- **Branch**: `codex/fix-post-bye-ghost-wake` (synced to router remote as `candidate-sync`)
+- **Latest Commit**: `4bd4d1e fix(audio): eliminate uplink audio drops via sample PTS, drop-on-latency false, and 120s stall timeout`
 - **Clean working tree**: All changes committed and verified.
 
 ### Completed Work Since Initial Handoff
-1. **Resolution of 5–6s Wake-to-End Cutoff**:
-   - Discovered that placing the 5.0-second initial conversation grace window inside `feedback_busy` caused `afe->disable_wakenet` and set `reset_before_rearm = true`.
-   - At exactly 5.0s after session activation, `feedback_busy` cleared and executed `afe->reset_buffer(afe_data)`.
-   - Concurrently, Core 0 was actively executing `afe->feed(afe_data, buffer)`. The Espressif `esp-sr` AFE ring buffer is not thread-safe for cross-core `reset_buffer` while `feed` runs, causing an immediate kernel panic/reset.
-   - Upon rebooting, the ESP32 played its boot chime (C-E-G triad), sounding like an "end beep", and because WebRTC abruptly disconnected, the Gateway terminated ChatGPT Voice before it could speak.
-   - **Fix**: Removed the conversation timer from `feedback_busy`. Placed the 5.0-second grace window check directly inside `if (detected)`: if WakeNet detects "Hi ESP" within the first 5.0 seconds of `VOICE_STATE_CONVERSATION`, it logs and ignores the detection without resetting AFE buffers or disabling WakeNet.
-   - Scaled jitter buffer `.cache_size` back to `8192` bytes (protecting internal SRAM) while retaining `120ms` timeout and `WIFI_PS_NONE`.
-   - Rebuilt and flashed firmware to `COM3` via `tools/flash-esp32-windows.ps1` (NVS `0x9000` strictly preserved). Verified boot, Wi-Fi `ps type: 0`, and Gateway sync `counter=1`.
-2. **Gateway Speculative Pre-Warming & Fast Long-Polling**:
-   - `gateway/main.go`:
-     - Added `speculativePrewarmVoice` triggered instantly upon accepting the WebRTC media offer (`POST /api/device/webrtc/offer`), launching `/voice/resume` in Chromium in the background at $t = 0.2\text{s}$ while the ESP32 performs MultiNet tail detection and DTLS handshake.
-     - Added fast long-polling wait (up to 1500ms) on `scheduleDeviceDispatch` done channel in `handleDeviceEvent`, returning `HTTP 200 OK` (`outcome: "executed"`) immediately on first request and eliminating the 500ms client sleep loop.
-     - Increased UDP socket read/write buffers on `iceConn` (1MB) and `deviceDownConn` (512KB) to eliminate socket receive buffer overruns.
-   - `gateway/devices.go`: Added `getEventResult` to fetch completed event records atomically.
-3. **Audio Quality & Voice Breakup Elimination**:
-   - `container/start-gst-device-downlink.sh`: Increased `pulsesrc` buffer to 200ms (`buffer-time=200000 latency-time=20000`) and enforced standard 20ms RTP packetization (`min-ptime=20000000 max-ptime=20000000` on `rtppcmapay`). Cut network packet rate from 200 pps (5ms micro-packets) to 50 pps (20ms standard frames), eliminating scheduling starvation.
-   - `firmware/esp32-s3-audio/main/provisioning.c`: Disabled Wi-Fi power saving (`esp_wifi_set_ps(WIFI_PS_NONE)`). Eliminated recurring Wi-Fi modem sleep and beacon timeouts (`wifi:bcn_timeout`).
-   - `firmware/esp32-s3-audio/main/media_session.c`: Tuned `esp_peer` jitter buffer (`cache_timeout = 120ms`, `resend_delay = 40ms`, `cache_size = 16384`) to absorb network jitter without declaring packet loss.
-   - Rebuilt firmware with ESP-IDF 5.5.5 and flashed to `COM3`.
-4. **Browser Controller Mutation Observation**:
-   - `services/browser-controller.mjs`:
-     - Replaced heavy DOM inspection loop in `startVoice()` and `stopVoice()` with Playwright's native `waitForSelector` (<20ms).
-     - Made `resumeVoice()` resilient: does not error on fresh chat URLs (`https://chatgpt.com/`), returns immediately if Voice is already active.
-5. **Production Deployment to FriendlyWrt Router**:
-   - Built candidate image `snowball-voice:candidate-fast` on `SNOWBALL-ROUTER` (`192.168.1.1`).
-   - Successfully deployed to production container `snowball-voice` using `tools/deploy-candidate.sh` with image tag `snowball-voice:0.3.4-fast`.
-   - Preserved rollback container `snowball-voice-rollback-20260903T022209Z`.
-   - All post-deploy healthchecks passed (`health: {"ok":true}`, `auth: {"setupRequired":false}`, `admin: 200`, `console: 401`, `ChatGPT: state "ready", authenticated: true`).
+1. **Diagnosis and Resolution of Uplink Speech Recognition ("GPT hard to listen", 50% chance)**:
+   - **Root Cause 1 (RTP Timestamp Skew)**: In `firmware/esp32-s3-audio/main/media_session.c`, `audio.pts` was assigned from `(uint32_t)(esp_timer_get_time() / 1000)` (milliseconds). For standard G.711 PCMA audio at 8000 Hz clock rate (RFC 3551), each 256-sample frame (32ms) must increment the RTP timestamp by 256 ticks. Incrementing by ~32 ticks was 8x too slow, causing GStreamer's jitter buffer to calculate severe timestamp drift.
+   - **Root Cause 2 (Jitterbuffer Packet Dropping)**: In `container/start-gst-device-uplink.sh`, `rtpjitterbuffer latency=50 drop-on-latency=true` discarded any packet that exceeded 50ms relative to the skewed clock. Over Wi-Fi, packets were routinely dropped, causing missing phonemes/words and making speech unintelligible to ChatGPT.
+   - **Root Cause 3 (PulseAudio Underruns & Mic Level)**: Microscopic 20ms buffer/5ms latency on `pulsesink` caused audio chopping under CPU load.
+   - **Fixes Applied**:
+     - `media_session.c`: Added monotonic 8000 Hz sample PTS counter (`uplink_sample_pts`), incremented by exactly `audio.size` (256) per frame.
+     - `container/start-gst-device-uplink.sh`: Set `latency=200 drop-on-latency=false`, added `volume volume=1.5` (+3.5 dB boost), and enlarged `pulsesink` to `buffer-time=200000 latency-time=20000`.
+     - `container/start-gst-uplink.sh`: Mirrored `drop-on-latency=false` and `buffer-time=200000 latency-time=20000`.
 
-### Operating Environments & Connectivity
+2. **Resolution of 40-45s Conversation Disconnect / Cutoff**:
+   - **Root Cause**: In `gateway/main.go`, `recoverStalledDeviceVoice()` checked `deviceAudioStallAfter = 45 * time.Second`. If the user spoke into the microphone but ChatGPT never responded (or during a thinking/silence pause >45s), the Gateway watchdog forcibly closed the WebRTC peer and ended ChatGPT Voice.
+   - **Fix Applied**: Increased `deviceAudioStallAfter = 120 * time.Second` (2 minutes), giving ample conversational pause room while still cleaning up orphaned sessions. Also gated synchronous long-polling wait to ESP32 User-Agent or `X-Snowball-Wait` header to maintain unit test compatibility.
+
+3. **Production Deployment & Device Flashing**:
+   - Firmware rebuilt with ESP-IDF 5.5.5 and flashed to `COM3` via `tools/flash-esp32-windows.ps1` (NVS `0x9000` strictly preserved).
+   - Candidate container image built on `SNOWBALL-ROUTER` (`192.168.1.1`) and deployed to production `snowball-voice` container via `tools/deploy-candidate.sh` as `snowball-voice:0.3.5-fast`.
+   - Verified all container services running (`gst-device-uplink`, `gst-device-downlink`, `browser-controller`, `snowball-gateway`).
+
+## Exact Next Action
+
+Conduct live physical speech verification:
+1. Speak *"Hi ESP"*.
+2. Wait for wake chime and ChatGPT greeting (~1.5–2s).
+3. Speak clearly to ChatGPT (e.g., ask questions, have a multi-turn conversation).
+4. Verify ChatGPT responds accurately without misunderstanding.
+5. Verify conversation can continue past 40 seconds without any premature disconnect.
+6. Speak *"Hi ESP"* to end session cleanly.
+
+## Operating Environments & Connectivity
 
 1. **Development Workstation (Windows)**:
    - Primary editing, Git repository, PowerShell environment.
