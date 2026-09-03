@@ -17,14 +17,18 @@ The active objective:
 
 ### Git State
 - **Branch**: `codex/fix-post-bye-ghost-wake` (pushed to router remote as `codex/fast-voice-candidate`)
-- **Latest Commit**: `1344f48 fix(audio): eliminate voice breakup via 20ms GStreamer framing, disabling Wi-Fi power save, and tuning jitter buffer`
+- **Latest Commit**: `7565bea fix(firmware): prevent AFE race crash and tune jitter buffer`
 - **Clean working tree**: All changes committed and verified.
 
 ### Completed Work Since Initial Handoff
-1. **Firmware Latency & Ghost-Wake Elimination**:
-   - `command_recognizer.c`: Tuned `COMMAND_TAIL_TIMEOUT_MS` from 1800ms to 600ms; set timeout default command to `SNOWBALL_COMMAND_RESUME`.
-   - `speech.c`: Changed initial optimistic command to `SNOWBALL_COMMAND_RESUME`. Added 5.0-second WakeNet suppression check after session activation to prevent ChatGPT's opening greeting from falsely triggering `hi_esp_end`.
-   - Built and flashed live to `COM3` via `tools/flash-esp32-windows.ps1` (NVS `0x9000` untouched).
+1. **Resolution of 5–6s Wake-to-End Cutoff**:
+   - Discovered that placing the 5.0-second initial conversation grace window inside `feedback_busy` caused `afe->disable_wakenet` and set `reset_before_rearm = true`.
+   - At exactly 5.0s after session activation, `feedback_busy` cleared and executed `afe->reset_buffer(afe_data)`.
+   - Concurrently, Core 0 was actively executing `afe->feed(afe_data, buffer)`. The Espressif `esp-sr` AFE ring buffer is not thread-safe for cross-core `reset_buffer` while `feed` runs, causing an immediate kernel panic/reset.
+   - Upon rebooting, the ESP32 played its boot chime (C-E-G triad), sounding like an "end beep", and because WebRTC abruptly disconnected, the Gateway terminated ChatGPT Voice before it could speak.
+   - **Fix**: Removed the conversation timer from `feedback_busy`. Placed the 5.0-second grace window check directly inside `if (detected)`: if WakeNet detects "Hi ESP" within the first 5.0 seconds of `VOICE_STATE_CONVERSATION`, it logs and ignores the detection without resetting AFE buffers or disabling WakeNet.
+   - Scaled jitter buffer `.cache_size` back to `8192` bytes (protecting internal SRAM) while retaining `120ms` timeout and `WIFI_PS_NONE`.
+   - Rebuilt and flashed firmware to `COM3` via `tools/flash-esp32-windows.ps1` (NVS `0x9000` strictly preserved). Verified boot, Wi-Fi `ps type: 0`, and Gateway sync `counter=1`.
 2. **Gateway Speculative Pre-Warming & Fast Long-Polling**:
    - `gateway/main.go`:
      - Added `speculativePrewarmVoice` triggered instantly upon accepting the WebRTC media offer (`POST /api/device/webrtc/offer`), launching `/voice/resume` in Chromium in the background at $t = 0.2\text{s}$ while the ESP32 performs MultiNet tail detection and DTLS handshake.
