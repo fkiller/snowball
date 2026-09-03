@@ -272,9 +272,9 @@ static void media_task(void *argument) {
         .agent_recv_timeout = 100,
         .rtp_cfg = {
             .audio_recv_jitter = {
-                .cache_timeout = 60,
-                .resend_delay = 20,
-                .cache_size = 8192,
+                .cache_timeout = 120,
+                .resend_delay = 40,
+                .cache_size = 16384,
             },
             .send_pool_size = 8192,
             .send_queue_num = 32,

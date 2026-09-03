@@ -682,6 +682,7 @@ static esp_err_t wifi_connect(const char *ssid, const char *password) {
         }
     }
     if (result == ESP_OK) {
+        (void)esp_wifi_set_ps(WIFI_PS_NONE);
         result = esp_wifi_connect();
     }
     secure_zero(&config, sizeof(config));
@@ -1609,6 +1610,7 @@ static void wifi_event(void *argument, esp_event_base_t base, int32_t event_id, 
     (void)argument;
     (void)data;
     if (base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        (void)esp_wifi_set_ps(WIFI_PS_NONE);
         xSemaphoreTake(status_mutex, portMAX_DELAY);
         current_status.wifi_connected = true;
         current_status.gateway_reachable = false;

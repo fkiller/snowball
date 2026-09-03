@@ -212,6 +212,8 @@ func newGateway(cfg config) (*gateway, error) {
 	if err != nil {
 		return nil, fmt.Errorf("bind LAN-only WebRTC socket: %w", err)
 	}
+	_ = iceConn.SetReadBuffer(1 << 20)
+	_ = iceConn.SetWriteBuffer(1 << 20)
 
 	uplinkConn, err := net.DialUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP("127.0.0.1"), Port: cfg.UplinkRTPPort})
 	if err != nil {
@@ -242,6 +244,7 @@ func newGateway(cfg config) (*gateway, error) {
 		deviceUplinkConn.Close()
 		return nil, fmt.Errorf("open device downlink RTP socket: %w", err)
 	}
+	_ = deviceDownConn.SetReadBuffer(512 << 10)
 
 	mediaEngine := &webrtc.MediaEngine{}
 	if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
