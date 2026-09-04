@@ -56,9 +56,12 @@ The active objective:
    - Holds 2 full 32ms frames, eliminating underruns while maintaining imperceptible sub-20ms latency.
 3. **Preserved Clean Volume Boost**:
    - Retained `volume volume=1.5` (+3.5 dB).
-4. **Built and Deployed `snowball-voice:0.3.7-nojitter`**:
+4. **Normalized Shell Script Line Endings (CRLF -> LF)**:
+   - In 0.3.7, Windows CRLF line endings caused `start-gst-device-uplink.sh` to fail with `/usr/bin/env: 'bash\r': No such file or directory`.
+   - Converted all shell scripts to LF endings, verified execution, and confirmed supervisor service stays running.
+5. **Built and Deployed `snowball-voice:0.3.8-nojitter`**:
    - Deployed via `tools/deploy-candidate.sh` with automated rollback guard.
-   - Verified container health (`{"ok":true}`) and ChatGPT Voice readiness (`voiceButtonPresent: true, voiceActive: false`).
+   - Verified container health (`{"ok":true}`) and tested active media pipeline spawn.
 
 ---
 
@@ -66,9 +69,9 @@ The active objective:
 
 1. **Firmware on ESP32**:
    - Commit `705af7b` running on `COM3`.
-   - Serial trace running in background.
+   - Serial trace running in background. WakeNet waiting for "Hi ESP".
 2. **Router Container**:
-   - Running `snowball-voice:0.3.7-nojitter` (no jitter buffer, 64ms PulseAudio buffer).
+   - Running `snowball-voice:0.3.8-nojitter` (no jitter buffer, 64ms PulseAudio buffer, LF endings).
    - ChatGPT session authenticated, healthy, and ready for voice.
 
 ---
@@ -80,6 +83,7 @@ Conduct physical test (Test 13):
 2. Wait for the wake chime.
 3. Have an extended conversation with ChatGPT (talk past 1–2 minutes, count numbers, or interrupt).
 4. Verify:
+   - Voice connects and ChatGPT speaks.
    - Voice stays active indefinitely without freezing or stopping at 30 seconds.
    - Zero creeping lag or slow recognition over time.
    - Fast turn-taking and responsive interruption.
