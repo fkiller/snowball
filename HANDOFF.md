@@ -24,51 +24,41 @@ The active objective:
 
 ---
 
-### Test Findings & Transcript Analysis (Test 11)
+### Test Findings & Analysis (Test 11 & Test 12)
 
-In Test 11, physical testing confirmed that the PTS fix and pre-voice buffer changes worked:
-- Connection delay was only 2–3s.
-- Bi-directional audio was functional, clean, and recognized accurately.
-- ChatGPT and the user held an 8-turn live conversation in Korean:
-  - User: *"네, 좋아요 하나"*
-  - ChatGPT: *"three."*
-  - User: *"셋"*
-  - ChatGPT: *"다섯."*
-  - User: *"five"*
-  - ChatGPT: *"일곱."*
-  - User: *"뭔 소리야. 내가 내가 셋 하지 않았어, 셋? 야, 인마. 니가 혼자서 막 가면 어떡해"*
-  - ChatGPT: *"아, 네, 네, 제가 조금 성급했네요. 다시 천천히 맞춰볼까요? 동원님이 하나 하시면, 제가 셋, 이렇게 한 템포씩 번갈아 가볼게요."*
+1. **Test 11 (200ms latency, `drop-on-latency=false`)**:
+   - Delay was reduced to 2–3s. Accurate Korean bi-directional recognition.
+   - User observed: *"slowly lagging (sound was okay but recognition speed was slow so it doesn't stop talking when I jump in) > after 50 sec conversation, it stops responding."*
+2. **Test 12 (50ms latency, `drop-on-latency=true`)**:
+   - User observed: *"short running becoming bigger issue now. all same but It only stays for 30 secs."*
+   - Retrieved transcript proved a 10-turn continuous conversation succeeded until turn 10 (~30s mark), where ChatGPT asked *"괜찮아요, 한 번만 더 같이 천천히 맞춰볼까요?"*, after which ChatGPT received no further audio.
+   - Gateway logs proved ESP32 microphone packets continued arriving for 2m0s until the stall watchdog fired at 2m55s.
 
-#### Symptoms Observed:
-1. **Accumulating Lag ("slowly lagging")**: Over the 50s session, speech recognition and response latency grew steadily.
-2. **Delayed Interruption**: When the user jumped in to interrupt, ChatGPT did not stop speaking immediately.
-3. **Turn Dropping After ~50s**: The conversation stopped progressing after ~50s.
-
-#### Root Cause:
-- In commit `4bd4d1e`, `container/start-gst-device-uplink.sh` had been speculatively modified:
-  - `latency=200 drop-on-latency=false`
-  - `buffer-time=200000 latency-time=20000`
-- **Why `drop-on-latency=false` caused the lag**:
-  - GStreamer's `rtpjitterbuffer` with `drop-on-latency=false` will **never** drop late packets to re-sync to real time.
-  - Any Wi-Fi packet jitter or slight clock drift between the ESP32 hardware and the router clock permanently pushed the playout delay higher without ever recovering.
-  - Over 50 seconds, buffer delay grew by several seconds.
-  - Because of this multi-second delay, user interruptions ("셋! 야 인마...") took seconds to reach Chromium, preventing ChatGPT from cutting off in real time and eventually causing turn-taking desynchronization.
+#### Root Cause: GStreamer `rtpjitterbuffer` on Localhost UDP
+- `start-gst-device-uplink.sh` reads packets forwarded by Go Gateway over localhost UDP (`127.0.0.1:49003`).
+- Pion WebRTC on the Gateway **already** terminates all Wi-Fi network jitter and delivers clean, reassembled RTP packets.
+- On loopback `127.0.0.1`, network jitter is literally zero.
+- Placing `rtpjitterbuffer` on this loopback stream with `mode=slave` caused GStreamer to compare RTP packet timestamps against the router's Linux system clock without RTCP sender reports.
+- Any tiny clock drift between the ESP32 hardware sampling clock and the Linux host clock caused the jitterbuffer to:
+  - Continuously accumulate playout delay when `drop-on-latency=false` (causing "slowly lagging" and 50s failure in Test 11).
+  - Reach the 50ms latency threshold in ~30 seconds when `drop-on-latency=true`, silently dropping 100% of subsequent packets as "too late" and starving Chromium of microphone audio (causing the 30s cutoff in Test 12).
+- Furthermore, `pulsesink buffer-time=20000` (20ms) was smaller than the ESP32's 32ms frame size, risking cyclic buffer underruns.
 
 ---
 
-### Fixes Applied (Commit `c677918` & Container `0.3.6-fast`)
+### Fix Applied (Commit `92cd71c` & Container `0.3.7-nojitter`)
 
-1. **Restored 50ms Real-Time Cap on Uplink Jitter Buffer**:
-   - `rtpjitterbuffer latency=50 drop-on-latency=true`
-   - Strict real-time pacing: packets arriving later than 50ms are dropped rather than delaying all subsequent conversation turns.
-2. **Restored Low-Latency PulseAudio Sink**:
-   - `buffer-time=20000 latency-time=5000` (20ms buffer, 5ms latency).
-   - Total pipeline latency reduced from ~420ms+ to **~70ms** fixed.
+1. **Eliminated `rtpjitterbuffer` from `start-gst-device-uplink.sh`**:
+   - Loopback UDP packets now flow directly: `udpsrc -> rtppcmadepay -> alawdec -> audioconvert -> audioresample -> volume -> pulsesink`.
+   - Zero clock-drift drift tracking, zero artificial buffering delay, zero dropped packets.
+2. **Right-Sized PulseAudio Sink Buffer**:
+   - Adjusted `pulsesink` to `buffer-time=64000 latency-time=16000` (64ms buffer, 16ms latency).
+   - Holds 2 full 32ms frames, eliminating underruns while maintaining imperceptible sub-20ms latency.
 3. **Preserved Clean Volume Boost**:
-   - Retained `volume volume=1.5` (+3.5 dB) for microphone clarity.
-4. **Deployed `snowball-voice:0.3.6-fast` on Router**:
-   - Deployed via `tools/deploy-candidate.sh` with automatic rollback protection.
-   - Container health, browser controller, and ChatGPT Voice readiness verified.
+   - Retained `volume volume=1.5` (+3.5 dB).
+4. **Built and Deployed `snowball-voice:0.3.7-nojitter`**:
+   - Deployed via `tools/deploy-candidate.sh` with automated rollback guard.
+   - Verified container health (`{"ok":true}`) and ChatGPT Voice readiness (`voiceButtonPresent: true, voiceActive: false`).
 
 ---
 
@@ -76,21 +66,21 @@ In Test 11, physical testing confirmed that the PTS fix and pre-voice buffer cha
 
 1. **Firmware on ESP32**:
    - Commit `705af7b` running on `COM3`.
-   - ESP32 in `VOICE_STATE_IDLE` with serial tracer active.
+   - Serial trace running in background.
 2. **Router Container**:
-   - Running `snowball-voice:0.3.6-fast` with 50ms drop-on-latency real-time pipeline.
+   - Running `snowball-voice:0.3.7-nojitter` (no jitter buffer, 64ms PulseAudio buffer).
    - ChatGPT session authenticated, healthy, and ready for voice.
 
 ---
 
 ## Exact Next Action
 
-Conduct live physical verification:
+Conduct physical test (Test 13):
 1. Say *"Hi ESP"*.
 2. Wait for the wake chime.
-3. Talk with ChatGPT (e.g. count numbers or interrupt while it is speaking).
+3. Have an extended conversation with ChatGPT (talk past 1–2 minutes, count numbers, or interrupt).
 4. Verify:
-   - Zero creeping lag throughout the entire conversation.
-   - ChatGPT immediately stops talking when you jump in to interrupt.
-   - Conversational turn-taking remains responsive past 50 seconds.
+   - Voice stays active indefinitely without freezing or stopping at 30 seconds.
+   - Zero creeping lag or slow recognition over time.
+   - Fast turn-taking and responsive interruption.
 5. Say *"Hi ESP"* to cleanly end the session.
