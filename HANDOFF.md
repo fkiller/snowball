@@ -13,58 +13,80 @@ Snowball is a LAN-only voice terminal pairing an ESP32-S3 audio speaker with a p
 The active objective:
 - Ensure 100% reliable, crystal-clear bi-directional conversation with ChatGPT without audio packet drops, recognition failures, or premature session cutoffs.
 
+---
+
 ## Current Repository & Operational State
 
 ### Git State
 - **Branch**: `codex/fix-post-bye-ghost-wake` (synced to router remote as `candidate-sync`)
-- **Latest Commit**: `4bd4d1e fix(audio): eliminate uplink audio drops via sample PTS, drop-on-latency false, and 120s stall timeout`
+- **Latest Commit**: `705af7b fix(audio): correct PCMA millisecond PTS and fast-drain prevoice queue`
 - **Clean working tree**: All changes committed and verified.
 
-### Completed Work Since Initial Handoff
-1. **Diagnosis and Resolution of Uplink Speech Recognition ("GPT hard to listen", 50% chance)**:
-   - **Root Cause 1 (RTP Timestamp Skew)**: In `firmware/esp32-s3-audio/main/media_session.c`, `audio.pts` was assigned from `(uint32_t)(esp_timer_get_time() / 1000)` (milliseconds). For standard G.711 PCMA audio at 8000 Hz clock rate (RFC 3551), each 256-sample frame (32ms) must increment the RTP timestamp by 256 ticks. Incrementing by ~32 ticks was 8x too slow, causing GStreamer's jitter buffer to calculate severe timestamp drift.
-   - **Root Cause 2 (Jitterbuffer Packet Dropping)**: In `container/start-gst-device-uplink.sh`, `rtpjitterbuffer latency=50 drop-on-latency=true` discarded any packet that exceeded 50ms relative to the skewed clock. Over Wi-Fi, packets were routinely dropped, causing missing phonemes/words and making speech unintelligible to ChatGPT.
-   - **Root Cause 3 (PulseAudio Underruns & Mic Level)**: Microscopic 20ms buffer/5ms latency on `pulsesink` caused audio chopping under CPU load.
-   - **Fixes Applied**:
-     - `media_session.c`: Added monotonic 8000 Hz sample PTS counter (`uplink_sample_pts`), incremented by exactly `audio.size` (256) per frame.
-     - `container/start-gst-device-uplink.sh`: Set `latency=200 drop-on-latency=false`, added `volume volume=1.5` (+3.5 dB boost), and enlarged `pulsesink` to `buffer-time=200000 latency-time=20000`.
-     - `container/start-gst-uplink.sh`: Mirrored `drop-on-latency=false` and `buffer-time=200000 latency-time=20000`.
+---
 
-2. **Resolution of 40-45s Conversation Disconnect / Cutoff**:
-   - **Root Cause**: In `gateway/main.go`, `recoverStalledDeviceVoice()` checked `deviceAudioStallAfter = 45 * time.Second`. If the user spoke into the microphone but ChatGPT never responded (or during a thinking/silence pause >45s), the Gateway watchdog forcibly closed the WebRTC peer and ended ChatGPT Voice.
-   - **Fix Applied**: Increased `deviceAudioStallAfter = 120 * time.Second` (2 minutes), giving ample conversational pause room while still cleaning up orphaned sessions. Also gated synchronous long-polling wait to ESP32 User-Agent or `X-Snowball-Wait` header to maintain unit test compatibility.
+### Root Cause Analysis & Technical Discoveries
 
-3. **Production Deployment & Device Flashing**:
-   - Firmware rebuilt with ESP-IDF 5.5.5 and flashed to `COM3` via `tools/flash-esp32-windows.ps1` (NVS `0x9000` strictly preserved).
-   - Candidate container image built on `SNOWBALL-ROUTER` (`192.168.1.1`) and deployed to production `snowball-voice` container via `tools/deploy-candidate.sh` as `snowball-voice:0.3.5-fast`.
-   - Verified all container services running (`gst-device-uplink`, `gst-device-downlink`, `browser-controller`, `snowball-gateway`).
+#### 1. `esp_peer` Timestamp Contract (`libpeer_default.a` Disassembly)
+- Disassembly of `.text.calc_timestamp` in Espressif's proprietary WebRTC library (`libpeer_default.a`):
+  ```assembly
+  00000000 <calc_timestamp>:
+       c: beqi a2, 8, 38      // If payload_type == 8 (PCMA)
+      38: slli a2, a3, 3      // a2 = a3 << 3 (a3 * 8)
+      3b: j 46
+      40: addx2 a3, a3, a3
+      43: slli a2, a3, 4      // If payload_type == 111 (OPUS): a3 * 48
+  ```
+- **Discovery**: `esp_peer_send_audio` explicitly takes `frame->pts` in **MILLISECONDS**. `calc_timestamp` computes `pts * 8` for PCMA (8000 Hz) or `pts * 48` for Opus (48000 Hz) to obtain the RTP packet timestamp.
+- **Flaw in commit `4bd4d1e`**: Passing raw sample counts (256 ticks per frame) as `audio.pts` caused `calc_timestamp` to multiply it by 8, producing **2048 ticks/frame** (8x faster than real-time). GStreamer/Chromium jitter buffers rejected or dropped packets 8x in the future, rendering microphone audio completely silent to ChatGPT in test 10.
+
+#### 2. Pre-Voice Buffer Live Speech Starvation
+- In `firmware/esp32-s3-audio/main/media_session.c`:
+  - When `uplink_enabled` became true, `prevoice_count` had accumulated ~137 frames (~4.4s of chime/silence).
+  - `send_prevoice_audio` paced at 40ms per frame ($137 \times 40\text{ms} = 5.5\text{ seconds}$).
+  - During those 5.5 seconds, `replaying_prevoice` was `true`, locking out `send_queued_audio` from sending live microphone audio.
+  - Because `MEDIA_AUDIO_QUEUE_DEPTH` was only 8 (256ms), the queue overflowed within 256ms and **all live user speech was dropped**.
+  - ChatGPT received only 5.5s of stale chime and silence; by the time live audio unlocked, the user had stopped talking, causing ChatGPT to remain completely silent.
+
+---
+
+### Fixes Applied (Commit `705af7b`)
+
+1. **Strictly Compliant Millisecond PTS**:
+   - `audio.pts = uplink_pts_ms;`
+   - `uplink_pts_ms += (uint32_t)(audio.size / 8);` (32ms per 256-sample frame).
+   - In `esp_peer`, `calc_timestamp` multiplies $32 \times 8 = 256$ ticks, exactly matching RFC 3551 standard RTP clock rate (8000 Hz).
+2. **Pre-Voice Backlog Pruning**:
+   - In `media_session_enable_uplink`: if `prevoice_count > 15`, set `prevoice_read = prevoice_count - 15;`.
+   - Discards stale wake chimes and silence from seconds ago, keeping at most the last 15 frames (~480ms).
+3. **Burst Drain of Preserved Speech**:
+   - `send_prevoice_audio` drains the 15 preserved frames in a tight burst (<10ms).
+   - Once drained, `send_queued_audio` immediately takes over for live streaming without any lockout.
+4. **Queue Depth & Overflow Protection**:
+   - Increased `MEDIA_AUDIO_QUEUE_DEPTH` from 8 to 32 (1024ms buffer).
+   - Implemented `memmove` sliding window in `media_session_push_pcm16k` to keep newest audio even if connection setup is extended.
+
+---
+
+### Deployment & Verification Status
+
+1. **Firmware Built & Flashed**:
+   - Compiled with ESP-IDF 5.5 (`idf.py build`) without errors.
+   - Flashed via `tools/flash-esp32-windows.ps1 -Port COM3` (NVS `0x9000` strictly preserved).
+   - ESP32 booted cleanly, connected to Wi-Fi, synchronized candidates with Gateway, and armed WakeNet.
+2. **Serial Tracer Running**:
+   - Background daemon logging to `trace-physical.log` on `COM3`.
+3. **Automated Tests**:
+   - `npm run lint`: PASSED (0 errors).
+   - `node --test tests/*.test.mjs`: PASSED (15/15 tests passed).
+
+---
 
 ## Exact Next Action
 
-Conduct live physical speech verification:
+Conduct live physical speech test:
 1. Speak *"Hi ESP"*.
-2. Wait for wake chime and ChatGPT greeting (~1.5–2s).
-3. Speak clearly to ChatGPT (e.g., ask questions, have a multi-turn conversation).
-4. Verify ChatGPT responds accurately without misunderstanding.
-5. Verify conversation can continue past 40 seconds without any premature disconnect.
-6. Speak *"Hi ESP"* to end session cleanly.
-
-## Operating Environments & Connectivity
-
-1. **Development Workstation (Windows)**:
-   - Primary editing, Git repository, PowerShell environment.
-   - Physical speaker attached on `COM3` (monitored via `tools/esp32-serial-trace-windows.ps1`).
-2. **Router Host (`SNOWBALL-ROUTER` / `192.168.1.1`)**:
-   - FriendlyWrt/OpenWrt ARM64 (Linux 5.10.160 aarch64, 8GB RAM).
-   - SSH Access: `ssh root@192.168.1.1` via local key `~/.ssh/id_ed25519`.
-   - Dedicated Docker Socket: `unix:///var/run/snowball-voice-docker.sock`.
-   - Live Production Container: `snowball-voice` (`snowball-voice:0.3.2-fast`), healthy and active.
-
-## Exact Next Action
-
-Conduct live physical speech verification:
-1. Speak *"Hi ESP"*.
-2. Confirm wake chime plays.
-3. Confirm ChatGPT Live Voice greeting begins within ~1.0–1.5 seconds.
-4. Speak naturally to verify bi-directional audio.
-5. Say *"Hi ESP"* to end session and observe clean termination.
+2. Listen for the wake chime.
+3. Speak a question immediately (e.g. *"What is the distance between the Earth and the Moon?"* or count 1 to 5).
+4. Verify ChatGPT Voice responds clearly and answers the question.
+5. Have a multi-turn conversation to verify ongoing bi-directional audio.
+6. Speak *"Hi ESP"* to end the session.
