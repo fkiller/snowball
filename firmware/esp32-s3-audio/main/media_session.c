@@ -19,7 +19,7 @@
 #define MEDIA_SDP_MAX (64U << 10)
 #define MEDIA_CONNECT_TIMEOUT_MS 30000
 #define MEDIA_AUDIO_SAMPLES_MAX 320
-#define MEDIA_AUDIO_QUEUE_DEPTH 8
+#define MEDIA_AUDIO_QUEUE_DEPTH 32
 #define MEDIA_PREVOICE_FRAME_CAPACITY 200 /* 8 seconds of 40 ms G.711A frames */
 #define MEDIA_TLS_MIN_PSRAM_BLOCK (128U << 10)
 #define MEDIA_TLS_MIN_INTERNAL_BLOCK (16U << 10)
@@ -46,6 +46,7 @@ static char *local_sdp;
 static uint32_t uplink_frames;
 static uint32_t downlink_frames;
 static uint32_t speaker_samples;
+static bool live_audio_sent;
 
 static bool tls_memory_gate(void) {
     size_t psram_largest = heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -77,7 +78,7 @@ typedef struct {
 } encoded_audio_t;
 
 static encoded_audio_t *prevoice_frames;
-static uint32_t uplink_sample_pts;
+static uint32_t uplink_pts_ms;
 
 static uint8_t linear_to_alaw(int16_t sample) {
     static const uint16_t segment_end[8] = {
@@ -226,40 +227,45 @@ static void send_queued_audio(esp_peer_handle_t peer) {
             break;
         }
         ++uplink_frames;
-        if (uplink_frames == 1) {
-            ESP_LOGI(TAG, "first microphone frame sent: %u bytes", (unsigned)audio.size);
+        if (!live_audio_sent) {
+            live_audio_sent = true;
+            ESP_LOGI(TAG, "first live microphone frame sent: %u bytes (total uplink_frames=%" PRIu32 ")",
+                     (unsigned)audio.size, uplink_frames);
         }
     }
     memset(&audio, 0, sizeof(audio));
 }
 
 /* Gateway's signed executed receipt means the browser has entered Voice.
- * Replay the bounded preserved opening at its original 40 ms cadence, rather
- * than as a burst into the virtual microphone. */
+ * Replay the bounded preserved speech frames immediately into the peer so live audio
+ * can resume in real time without lag or queue dropouts. */
 static void send_prevoice_audio(esp_peer_handle_t peer) {
-    encoded_audio_t audio = {0};
-    bool available = false;
-    int64_t now = esp_timer_get_time();
-    portENTER_CRITICAL(&media_lock);
-    if (uplink_enabled && prevoice_read < prevoice_count && now >= prevoice_next_send_us) {
-        audio = prevoice_frames[prevoice_read++];
-        prevoice_next_send_us = now + 40000;
-        available = true;
-    }
-    portEXIT_CRITICAL(&media_lock);
-    if (!available) return;
-    esp_peer_audio_frame_t frame = { .pts = audio.pts, .data = audio.data, .size = audio.size };
-    int result = esp_peer_send_audio(peer, &frame);
-    if (result == ESP_PEER_ERR_WOULD_BLOCK) {
+    while (1) {
+        encoded_audio_t audio = {0};
+        bool available = false;
         portENTER_CRITICAL(&media_lock);
-        if (prevoice_read > 0) --prevoice_read;
-        prevoice_next_send_us = esp_timer_get_time() + 10000;
+        if (uplink_enabled && prevoice_read < prevoice_count) {
+            audio = prevoice_frames[prevoice_read++];
+            available = true;
+        }
         portEXIT_CRITICAL(&media_lock);
-    } else if (result != ESP_PEER_ERR_NONE) {
-        ESP_LOGW(TAG, "pre-Voice audio send failed: %d", result);
-    } else {
+        if (!available) break;
+
+        esp_peer_audio_frame_t frame = { .pts = audio.pts, .data = audio.data, .size = audio.size };
+        int result = esp_peer_send_audio(peer, &frame);
+        if (result == ESP_PEER_ERR_WOULD_BLOCK) {
+            portENTER_CRITICAL(&media_lock);
+            if (prevoice_read > 0) --prevoice_read;
+            portEXIT_CRITICAL(&media_lock);
+            break;
+        } else if (result != ESP_PEER_ERR_NONE) {
+            ESP_LOGW(TAG, "pre-Voice audio send failed: %d", result);
+            break;
+        }
         ++uplink_frames;
-        if (uplink_frames == 1) ESP_LOGI(TAG, "first preserved microphone frame sent: %u bytes", (unsigned)audio.size);
+        if (uplink_frames == 1) {
+            ESP_LOGI(TAG, "first preserved microphone frame sent: %u bytes", (unsigned)audio.size);
+        }
     }
 }
 
@@ -489,7 +495,8 @@ esp_err_t media_session_start(uint32_t boot_nonce, uint32_t offer_counter, uint3
     prevoice_read = 0;
     uplink_enabled = false;
     prevoice_next_send_us = 0;
-    uplink_sample_pts = 0;
+    uplink_pts_ms = 0;
+    live_audio_sent = false;
     portEXIT_CRITICAL(&media_lock);
     xQueueReset(audio_queue);
     if (xTaskCreate(media_task, "snowball_media", 16384, NULL, 6, &media_task_handle) != pdPASS) {
@@ -517,16 +524,20 @@ esp_err_t media_session_push_pcm16k(const int16_t *samples, size_t sample_count)
             source += 2;
         }
         portENTER_CRITICAL(&media_lock);
-        audio.pts = uplink_sample_pts;
-        uplink_sample_pts += (uint32_t)audio.size;
+        audio.pts = uplink_pts_ms;
+        uplink_pts_ms += (uint32_t)(audio.size / 8);
         bool hold_for_voice = !uplink_enabled;
-        if (hold_for_voice && prevoice_count < MEDIA_PREVOICE_FRAME_CAPACITY) {
-            prevoice_frames[prevoice_count++] = audio;
+        if (hold_for_voice) {
+            if (prevoice_count < MEDIA_PREVOICE_FRAME_CAPACITY) {
+                prevoice_frames[prevoice_count++] = audio;
+            } else {
+                memmove(&prevoice_frames[0], &prevoice_frames[1], (MEDIA_PREVOICE_FRAME_CAPACITY - 1) * sizeof(encoded_audio_t));
+                prevoice_frames[MEDIA_PREVOICE_FRAME_CAPACITY - 1] = audio;
+            }
             portEXIT_CRITICAL(&media_lock);
             continue;
         }
         portEXIT_CRITICAL(&media_lock);
-        if (hold_for_voice) continue; /* bounded: retain opening speech, not unbounded audio */
         if (xQueueSend(audio_queue, &audio, 0) != pdTRUE) return ESP_ERR_TIMEOUT;
     }
     return ESP_OK;
@@ -537,11 +548,20 @@ void media_session_enable_uplink(uint32_t attempt) {
     bool current = active && connected && attempt != 0 && attempt == session_attempt;
     if (current) {
         uplink_enabled = true;
-        prevoice_next_send_us = esp_timer_get_time();
+        if (prevoice_count > 15) {
+            prevoice_read = prevoice_count - 15;
+        } else {
+            prevoice_read = 0;
+        }
+        prevoice_next_send_us = 0;
     }
-    size_t frames = prevoice_count;
+    size_t frames = prevoice_count - prevoice_read;
+    size_t skipped = prevoice_read;
     portEXIT_CRITICAL(&media_lock);
-    if (current) ESP_LOGI(TAG, "[STREAM] browser-ready uplink enabled; preserved_frames=%u", (unsigned)frames);
+    if (current) {
+        ESP_LOGI(TAG, "[STREAM] browser-ready uplink enabled; preserved_frames=%u (skipped=%u)",
+                 (unsigned)frames, (unsigned)skipped);
+    }
 }
 
 void media_session_stop(void) {
