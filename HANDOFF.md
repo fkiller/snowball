@@ -2,13 +2,16 @@
 
 ## Status
 
-**Handoff state: READY** (Updated 2026-09-05 09:29 EDT)
+**Handoff state: READY** (updated 2026-09-05 10:27 EDT)
 
-The full-duplex continuity candidate is implemented, committed, simulated,
-built, and host-tested. It has **not** been flashed to the physical ESP32 or
-deployed over the production Gateway. Production remains unchanged and
-healthy. The remaining gate is an explicitly authorized candidate rollout and
-long physical full-duplex acceptance.
+The reproduced long-running full-duplex cutoff is fixed, deployed, flashed,
+and physically verified for 10 minutes 30 seconds. Production Gateway image
+`snowball-voice:0.3.10-full-duplex` is healthy. The final, test-hook-free
+firmware is running on the ESP32-S3 and has resynchronized with the Gateway.
+
+The transport problem is no longer an untested hypothesis. The remaining work
+is broader product acceptance: three ordinary spoken wake/converse/end cycles,
+acoustic barge-in behavior, and an optional 30-minute physical soak.
 
 ## 1. Objective
 
@@ -16,269 +19,209 @@ Snowball is a LAN-only voice terminal pairing an ESP32-S3 audio speaker with a
 persistent ChatGPT Web Voice session in headed Chromium on the ARM64 OpenWrt
 router at `192.168.1.1`.
 
-The current objective is continuous full-duplex conversation without creeping
-latency, microphone starvation, premature session closure, watchdog resets, or
-post-session ghost wakes.
+The objective is continuous full-duplex conversation without creeping latency,
+microphone starvation, false stall recovery, watchdog resets, or post-session
+ghost wakes.
 
-## 2. Root-cause conclusion
+## 2. Proven root causes
 
-The long-session failure had two independent mechanisms in series:
+Three independent mechanisms existed in series:
 
-1. The Gateway formerly ran GStreamer's `rtpjitterbuffer` after Pion had already
-   terminated Wi-Fi/WebRTC jitter. On localhost without RTCP sender reports,
-   ESP32/Linux clock drift accumulated latency or eventually caused packet
-   drops. Production image `snowball-voice:0.3.8-nojitter` already removes this
-   redundant jitter buffer.
-2. The ESP32 still performed A-law decode and the blocking
-   `esp_codec_dev_write()` synchronously inside `peer_audio_callback`. Vendor
-   disassembly confirms the callback runs inside `esp_peer_main_loop()`:
+1. The Gateway had a redundant GStreamer `rtpjitterbuffer` after Pion had
+   already terminated the Wi-Fi WebRTC transport. Without RTCP sender reports,
+   clock-domain drift accumulated latency or crossed the drop threshold.
+   Production `0.3.8-nojitter` removed this stage.
+2. ESP32 A-law decode plus blocking `esp_codec_dev_write()` ran synchronously
+   in the receive callback inside `esp_peer_main_loop()`. Continuous 20 ms
+   downlink packets starved the same media task that had to send 32 ms
+   microphone packets. This was head-of-line blocking, not heap exhaustion.
+3. After decoupling playback exposed a healthy transport, the Gateway recovery
+   watchdog still treated only non-silent PCMA samples as downlink liveness.
+   ChatGPT Voice sends continuous valid silent RTP while quiet. Because silence
+   did not update `lastDeviceDownlinkAudio`, the watchdog forcibly closed the
+   peer after exactly two minutes of microphone activity.
 
-   ```text
-   esp_peer_main_loop
-     -> peer_recv_streams
-        -> peer_insert_rtp_payload
-           -> rtp_decoder_decode
-              -> on_audio
-                 -> peer_audio_callback
-                    -> esp_codec_dev_write   (old blocking path)
-   ```
+The final Gateway fix records `lastDeviceDownlinkPacket` after every successful
+current-peer RTP write and uses that timestamp for transport recovery.
+`lastDeviceDownlinkAudio` remains signal-only telemetry.
 
-   The Gateway supplies a 160-byte PCMA packet every 20 ms, while the physical
-   firmware produces a 256-byte microphone packet every 32 ms. Continuous
-   blocking playback prevented the media task from returning from
-   `esp_peer_main_loop()` often enough to drain microphone audio. This is
-   head-of-line blocking, not heap exhaustion.
+Full evidence and the vendor callback chain are in
+`docs/FULL_DUPLEX_STABILITY.md`.
 
-Physical trace evidence from the old firmware:
+## 3. Implemented solution
 
-| Attempt | Uplink delivered | Downlink played | Uplink audio / downlink time |
-| --- | ---: | ---: | ---: |
-| 2 | 3,444 frames = 110.208 s | 11,005 frames = 220.100 s | 50.1% |
-| 8 | 2,642 frames = 84.544 s | 10,087 frames = 201.740 s | 41.9% |
+ESP32 transport implementation: commit
+**`32d56ce fix: decouple ESP32 full-duplex audio paths`**.
 
-Both ended with an ESP32 DTLS read failure and later closure. The largest
-internal block remained about 31,744 bytes and the largest PSRAM block about
-2.42 MiB, so there is no monotonic heap-collapse signature. Historical router
-logs were lost on container replacement; the final browser-side close reason
-is therefore an inference. The next physical run has counters at both ends to
-prove the remaining boundary.
+- The receive callback now only copies into a bounded eight-packet queue.
+- A dedicated priority-5 playback task performs decode and blocking codec/I2S
+  writes; the priority-6 media task remains free to send microphone frames.
+- Eight-frame sliding queues cap downlink at 160 ms and uplink at 256 ms. On
+  overload they discard oldest audio instead of accumulating latency.
+- The 200-frame pre-Voice store is an O(1) circular buffer. Browser-ready replay
+  is idempotent and preserves only the latest 15 frames (480 ms).
+- Codec conversion uses a 160-sample/2.5 KiB block rather than a permanent
+  320-sample/5 KiB stack array.
+- Session lifecycle prevents overlapping playback tasks.
+- Five-second and final telemetry exposes queue depth/high-water, drops,
+  `WOULD_BLOCK`, codec duration, stack low-water, and cross-end RTP counters.
 
-The complete analysis is in `docs/FULL_DUPLEX_STABILITY.md`.
+Gateway watchdog implementation and regression test: commit
+**`e0ef73d fix: keep silent full-duplex RTP sessions alive`**.
 
-## 3. Implemented candidate
+- Silent PCMA RTP packets now count as downlink transport liveness.
+- A regression test proves continuous silent downlink does not close the peer.
+- The existing no-packet recovery test still proves a truly stalled peer is
+  closed and browser Voice is stopped.
 
-Implementation commit: **`32d56ce fix: decouple ESP32 full-duplex audio paths`**.
+AFE AEC remains disabled because the earlier AEC/SE profile caused watchdog
+failures. That is an acoustic echo-quality limitation, not the continuity
+failure fixed here.
 
-### ESP32 transport and performance changes
+## 4. Simulation and host verification
 
-- `peer_audio_callback` now performs only a bounded packet copy; it never calls
-  the blocking codec writer.
-- A dedicated priority-5 playback task decodes A-law and writes codec/I2S audio.
-  The priority-6 peer task can continue sending microphone packets.
-- The downlink queue holds eight 20 ms packets (160 ms). The uplink queue holds
-  eight 32 ms packets (256 ms). Both discard the oldest packet on overload so
-  latency cannot grow without bound.
-- The 200-frame pre-Voice store is now an O(1) circular ring (6.4 s) instead of
-  performing a roughly 65 KiB `memmove` while holding a cross-core critical
-  section.
-- Browser-ready replay is idempotent and sends only the latest 15 frames
-  (480 ms) before live microphone traffic.
-- Codec conversion uses a 160-sample/2.5 KiB stack block; a 320-sample input is
-  processed in two blocks instead of keeping a 5 KiB array.
-- Session lifecycle rejects a new session while an old playback task exists.
-- Five-second and final telemetry reports generated/sent/dropped counts, queue
-  high-water marks, send `WOULD_BLOCK`, playback maximum duration, and playback
-  task stack low-water.
+| Model | Load | Result |
+| --- | --- | --- |
+| Old coupled callback | 5 min nominal saturation | 0/9,375 uplink delivered; queue reached 8 |
+| Decoupled playback | 5 min nominal | 9,375/9,375 uplink and 15,000/15,000 downlink; zero drops |
+| Decoupled stress | 30 min, downlink +2,000 ppm, 120 ms codec stall/min | all 56,250 uplink delivered; bounded 159.680 ms downlink age |
 
-Final ESP-IDF link result:
+Completed checks:
 
-- application image: `2,235,817` bytes (`0x221da9`), 28.9% app-partition free;
-- static D/IRAM: `173,767 / 341,760` bytes, `167,993` bytes free;
-- static IRAM remains the existing `16,384 / 16,384` configuration.
+- Linux ARM64 `go test -race ./...`: **PASS**.
+- Linux ARM64 `go vet ./...`: **PASS**.
+- Focused silent-packet and true-stall Gateway recovery tests: **PASS**.
+- Real-cadence Pion emulator and deterministic 5/30-minute models: **PASS**.
+- Frontend dependency audit, lint, build, and 15/15 tests: **PASS**.
+- Final ESP-IDF build: **PASS**, application `0x221e40` bytes with 29% of the
+  smallest app partition free.
+- ARM64 production image build: **PASS**, image
+  `sha256:e7755e9c1d282443522f5c9beb4be02115e9056f7650b31e9a62cd7b7d90c043`.
 
-### Gateway observability
+Native Windows `go test ./...` retains known pre-existing POSIX-only failures
+for `0666` mode expectations and `/tmp`; the authoritative Linux ARM64 race
+suite passes.
 
-- Per-session PCMA uplink/downlink frame and payload-byte counters are exposed
-  under `/api/status` -> `webrtc`.
-- Peer-close logs preserve the four final counter totals.
-- Counters are updated only for the current peer and reset atomically with peer
-  replacement/closure using the established `peerMu -> audioMu` lock order.
+## 5. Physical reproduction and acceptance
 
-### Emulator and acceptance tooling
+### Run 1: ESP32 fix with old Gateway watchdog
 
-- The emulator now matches physical 256-byte/32 ms uplink frames and continuous
-  Gateway 160-byte/20 ms downlink RTP.
-- Microphone capture runs concurrently with WebRTC and command resolution.
-- The delayed-browser case actually overflows the 200-frame ring and verifies
-  oldest overwrite plus latest-15 replay.
-- `gateway/emulator/transport_model.go` adds deterministic virtual-time 5- and
-  30-minute transport soaks.
-- `tools/esp32-voice-trace-report.sh` version 2 parses the new totals and fails a
-  complete cycle for sustained uplink delivery below 99%, downlink drops over
-  1%, playback over 100 ms, or playback stack headroom below 1 KiB.
+The decoupled ESP32 remained healthy, but the peer still closed after 2m23s.
+Gateway logged:
 
-## 4. Simulation results
+```text
+recovering stalled device Voice: no PCMA response for 2m0s after microphone activity
+connectedFor=2m23.035s uplinkFrames=4390 downlinkFrames=7058
+```
 
-| Model | Load | Uplink | Downlink | Observed bound |
-| --- | --- | ---: | ---: | ---: |
-| Old coupled callback | 5 min nominal saturation envelope | 0 / 9,375; 9,367 dropped | 15,000 / 15,000 | uplink queue 8 |
-| Decoupled candidate | 5 min nominal | 9,375 / 9,375; 0 dropped | 15,000 / 15,000; 0 dropped | uplink age 8 ms |
-| Decoupled stress | 30 min; downlink +2,000 ppm; 120 ms codec stall/min | 56,250 / 56,250; 0 dropped | 89,826 / 90,180; 347 bounded drops | downlink age 159.680 ms |
+ESP32 reported uplink sent 4,436, downlink received/played 7,052/7,052, zero
+drops. This isolated the remaining failure to the Gateway watchdog rather than
+ESP32 CPU, RAM, codec, Wi-Fi, or DTLS capacity.
 
-The zero-uplink old result is a saturation envelope, not a fitted prediction of
-the physical board. The physical old firmware retained only 42--50% uplink.
-The model isolates the scheduling mechanism and proves that playback stalls no
-longer propagate into uplink processing in the candidate architecture.
+### Run 2: final Gateway logic with decoupled ESP32
 
-## 5. Verification completed
+The physical board ran continuous bidirectional PCMA for 10m30s and was then
+stopped deliberately:
 
-- ESP-IDF firmware build: **PASS**.
-- ESP-IDF `size`: **PASS**, values recorded above.
-- `go test -count=1 ./devproto ./emulator`: **PASS**.
-- Deterministic transport soak tests with verbose result logging: **PASS**.
-- Linux ARM64 container `go test -race ./...`: **PASS** for `gateway`,
-  `devproto`, and `emulator`.
-- Linux ARM64 container `go vet ./...`: **PASS**.
-- `npm ci --ignore-scripts`: **PASS**.
-- `npm audit --omit=dev --audit-level=high`: **PASS**, zero production findings.
-- `npm run lint`: **PASS**.
-- `vinext build` plus `node --test tests/*.test.mjs`: **PASS**, 15/15 tests.
-- Synthetic pass/fail fixtures for trace-report version 2: **PASS**; the failing
-  media fixture correctly returns non-zero.
-- ARM64 Docker candidate build: **PASS**.
-  - tag: `snowball-voice:full-duplex-test-20260905`
-  - image: `sha256:1181b97c0f0f0d5270a815767b7649870a40953e1ac0179c3e683f770ebff219`
-  - size: `1,422,879,831` bytes
-- `git diff --check`: **PASS**; only expected CRLF-to-LF checkout notices were
-  printed before staging.
+| Metric | Result |
+| --- | ---: |
+| ESP32 uplink generated | 19,673 frames |
+| ESP32 uplink sent | 19,539 frames |
+| Pre-browser-ready frames intentionally skipped | 133 frames |
+| Gateway uplink received | 19,539 frames (exact match) |
+| ESP32 downlink received / played | 31,357 / 31,351 frames |
+| Gateway downlink sent | 31,615 frames, including close-propagation tail |
+| Uplink / downlink drops | 0 / 0 |
+| Send `WOULD_BLOCK` | 0 |
+| Uplink / downlink queue high-water | 4/8 / 6/8 |
+| Maximum playback write | 32.212 ms |
+| Playback task stack low-water | 3,700 bytes |
+| Panic / unexpected reset / forced recovery | 0 / 0 / 0 |
 
-Known host-only command caveats:
+`tools/esp32-voice-trace-report.sh` reports `quality=pass` and one complete
+cycle. The USB-only trigger used to enter the normal wake -> command -> WebRTC
+media path was removed after testing. The final source tree and flashed image
+contain no soak command or test hook.
 
-- The literal `npm test` script uses POSIX inline environment syntax and fails
-  in Windows PowerShell because `WRANGLER_LOG_PATH=...` is interpreted as a
-  command. The equivalent PowerShell environment assignment followed by the
-  same build/tests passed.
-- Native Windows `go test ./...` still fails pre-existing POSIX-assumption tests
-  (`0666` file-mode expectations and `/tmp` paths). The required Linux ARM64
-  race suite passes completely.
-
-## 6. Live and repository state
+## 6. Live state
 
 ### Physical ESP32
 
-- Still running firmware commit `705af7b`; the new candidate has not been
-  flashed.
-- Attached on the Windows workstation and continuously producing audio-level
-  events in `trace-physical.log` as of 2026-09-05 09:29 EDT.
-- No NVS contents were touched.
+- Final application SHA-256:
+  `14A76BED30E8B5AB6006AD5CB5B0F6B2CD735741E955B3FFD90EE02F894A13DE`.
+- Protected esptool flash verified all written images by hash.
+- Written offsets were only bootloader `0x0`, partition table `0x8000`,
+  application `0x10000`, and speech models `0x310000`.
+- NVS at `0x9000` was not addressed; identity, Wi-Fi, enrollment, and keys were
+  preserved.
+- Final boot produced audio-level events and Gateway accepted a new `sync`
+  event at 2026-09-05 10:24:37 EDT.
+- UART collection resumed in `trace-physical.log`.
 
 ### Production router
 
-- Host: `SNOWBALL-ROUTER` at `192.168.1.1`.
-- Production container: `snowball-voice`.
-- Production image: `snowball-voice:0.3.8-nojitter`.
-- State at handoff: `Up 34 hours (healthy)`.
-- Browser state: ready, authenticated, Voice inactive, voice button present.
-- A stale ChatGPT dynamic-import error remains in browser status, but the
-  current ready/authenticated result is authoritative.
-- Production was not restarted, replaced, or stopped during candidate work.
+- Container: `snowball-voice`.
+- Image: `snowball-voice:0.3.10-full-duplex`.
+- State at handoff: healthy.
+- Browser: ready, authenticated, Voice inactive, voice button present.
+- Immediate rollback: `snowball-voice-rollback-20260905T140909Z`, image
+  `snowball-voice:0.3.9-full-duplex`.
+- Earlier known-good rollback is also preserved as
+  `snowball-voice-rollback-20260905T133601Z`, image
+  `snowball-voice:0.3.8-nojitter`.
+- Router Docker socket: `unix:///var/run/snowball-voice-docker.sock`.
 
-### Candidate build workspace
-
-- Router test clone: `/root/snowball-full-duplex-test-20260905`.
-- This is an isolated build/test clone, not `/root/snowball-voice` and not the
-  production deployment source.
-- The separate candidate image tag above is built from the tested Gateway
-  source. It has not been run as the production container.
-
-### Local Git
+### Local repository
 
 - Branch: `codex/fix-post-bye-ghost-wake`.
-- Candidate implementation commit: `32d56ce`.
-- `HANDOFF.md` is updated in the documentation-only commit immediately after
-  that implementation commit.
-- Expected working tree after the handoff commit: clean.
+- Transport commit: `32d56ce`.
+- Silent-RTP watchdog commit: `e0ef73d`.
+- Physical evidence logs are intentionally untracked runtime artifacts:
+  `trace-full-duplex-soak-20260905.log` and
+  `trace-full-duplex-soak2-20260905.log`.
 
-## 7. Remaining work and exact next action
+## 7. Remaining validation
 
-State-changing rollout was intentionally not inferred from the diagnosis and
-implementation request. The next action requires explicit user authorization:
+The reproduced transport cutoff has passed its 10-minute gate. Do not conflate
+the following remaining acoustic/product checks with the fixed transport bug:
 
-1. Deploy the already-built Gateway candidate through
-   `tools/deploy-candidate.sh` with its explicit approval/rollback guard.
-2. Flash the matching firmware application with the protected helper. The only
-   allowed offsets are bootloader `0x0`, partition table `0x8000`, application
-   `0x10000`, and speech models `0x310000`. **Never write NVS at `0x9000`.**
-3. Immediately run three ordinary wake/converse/end cycles.
-4. Run one continuous 10-minute full-duplex/barge-in test, then a 30-minute
-   conversation or equivalent bidirectional audio soak.
-5. Compare ESP32 `uplink_sent` with Gateway `uplinkFrames`, and Gateway
-   `downlinkFrames` with ESP32 `downlink_received`, allowing only packets in
-   flight at shutdown.
+1. Perform three ordinary spoken `Hi ESP` wake/converse/`Hi ESP` end cycles.
+2. Exercise repeated acoustic barge-in while ChatGPT is speaking; AEC is still
+   disabled, so echo behavior must be judged separately.
+3. Run a 30-minute physical session for additional unattended soak confidence.
+4. Keep the same limits: under 1% drops, playback under 100 ms, stack low-water
+   at least 1,024 bytes, bounded queue depth, and no memory-block degradation.
 
-Do not label the issue physically fixed until those gates pass.
-
-## 8. Physical acceptance gates
-
-- No panic, watchdog, overlapping playback task, TLS memory-gate failure, or
-  unplanned DTLS closure in all three ordinary cycles.
-- Continuous Voice remains responsive past 10 minutes, including repeated
-  interruption while ChatGPT is speaking.
-- Steady-state uplink and downlink loss each remain below 1%; normal target is
-  zero.
-- Playback writes stay below 100 ms and playback stack low-water remains at
-  least 1,024 bytes.
-- Queue depths remain bounded; no increasing turn-to-turn latency.
-- Internal and PSRAM largest-block values do not trend downward across sessions.
-- Session ends cleanly on `Hi ESP` without ghost wake or media-task overlap.
-
-## 9. Known limitation
-
-AFE AEC remains disabled because the prior AEC/SE configuration caused watchdog
-failures. This affects acoustic echo and barge-in quality but is not the
-transport starvation mechanism above. Treat AEC as a separate measured change
-only after the transport candidate passes long physical acceptance.
-
-## 10. Constraints
+## 8. Constraints
 
 - LAN-only; no WAN listeners, relays, or wildcard external binds.
-- Never flash NVS at `0x9000`; it contains device P-256 keys, Wi-Fi credentials,
-  enrollment state, and tokens.
-- Router Docker socket is
-  `unix:///var/run/snowball-voice-docker.sock`.
-- Never restart/replace/stop production without explicit approval.
-- Deployment must use `tools/deploy-candidate.sh` with
-  `SNOWBALL_DEPLOY_APPROVAL=YES` after explicit maintenance approval.
-- Flashing must use the protected Windows or router helper and preserve the
-  serial collector ownership sequence.
+- Never flash NVS at `0x9000`.
+- Production deployment uses `tools/deploy-candidate.sh` with explicit
+  `SNOWBALL_DEPLOY_APPROVAL=YES` and a preserved rollback container.
+- Firmware flashing uses a protected helper and the serial-collector ownership
+  sequence.
 
-## 11. Key files
+## 9. Key files
 
 | File | Purpose |
 | --- | --- |
-| `docs/FULL_DUPLEX_STABILITY.md` | Root-cause evidence, architecture, simulation, acceptance |
-| `firmware/esp32-s3-audio/main/media_session.c` | Decoupled queues/tasks, pre-Voice ring, transport metrics |
-| `firmware/esp32-s3-audio/main/board_audio.c` | Smaller block-based codec conversion |
-| `gateway/main.go` | Cross-end PCMA telemetry |
-| `gateway/emulator/transport_model.go` | Deterministic long-duration transport model |
-| `gateway/emulator/emulator_test.go` | Real Pion continuous bidirectional media scenarios |
-| `tools/esp32-voice-trace-report.sh` | Physical-cycle media-quality gate |
-| `docs/RESOURCE_BUDGET.md` | Firmware size and memory budget |
-| `docs/TEST_SCENARIOS.md` | Physical 10/30-minute acceptance procedure |
+| `docs/FULL_DUPLEX_STABILITY.md` | Root causes, architecture, models, physical evidence |
+| `firmware/esp32-s3-audio/main/media_session.c` | Decoupled queues/tasks and metrics |
+| `firmware/esp32-s3-audio/main/board_audio.c` | Bounded block codec conversion |
+| `gateway/main.go` | Watchdog liveness and cross-end RTP counters |
+| `gateway/main_test.go` | Silent-packet and true-stall recovery regression tests |
+| `gateway/emulator/transport_model.go` | Deterministic long-duration model |
+| `tools/esp32-voice-trace-report.sh` | Physical media-quality gate |
 
-## 12. Useful read-only checks
+## 10. Useful read-only checks
 
 ```powershell
-# Physical UART evidence
 Get-Content trace-physical.log -Tail 100
 
-# Production state (do not restart it)
 ssh root@192.168.1.1 "docker -H unix:///var/run/snowball-voice-docker.sock ps --filter name=snowball-voice"
 ssh root@192.168.1.1 "docker -H unix:///var/run/snowball-voice-docker.sock exec snowball-voice curl -fsS http://127.0.0.1:3100/status"
 
-# Local focused tests
 Push-Location gateway
-go test -count=1 ./devproto ./emulator
-go test -count=1 -run TransportSoak -v ./emulator
+go test -count=1 -run 'TestRecoverStalledDeviceVoice' -v .
 Pop-Location
 ```
