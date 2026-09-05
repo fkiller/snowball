@@ -130,17 +130,18 @@ type gateway struct {
 	deviceVoiceInactiveObservations uint8
 	peerAudioMode                   string
 
-	audioMu                 sync.RWMutex
-	lastDeviceUplinkAudio   time.Time
-	lastDeviceDownlinkAudio time.Time
-	lastVoiceRecovery       time.Time
-	deviceUplinkLogged      bool
-	deviceDownlinkLogged    bool
-	deviceUplinkFrames      uint64
-	deviceUplinkBytes       uint64
-	deviceDownlinkFrames    uint64
-	deviceDownlinkBytes     uint64
-	voiceMu                 sync.Mutex
+	audioMu                  sync.RWMutex
+	lastDeviceUplinkAudio    time.Time
+	lastDeviceDownlinkAudio  time.Time
+	lastDeviceDownlinkPacket time.Time
+	lastVoiceRecovery        time.Time
+	deviceUplinkLogged       bool
+	deviceDownlinkLogged     bool
+	deviceUplinkFrames       uint64
+	deviceUplinkBytes        uint64
+	deviceDownlinkFrames     uint64
+	deviceDownlinkBytes      uint64
+	voiceMu                  sync.Mutex
 
 	pushMu        sync.RWMutex
 	pushKeys      pushKeys
@@ -330,6 +331,7 @@ func (g *gateway) closeActivePeer() bool {
 	downlinkBytes := g.deviceDownlinkBytes
 	g.lastDeviceUplinkAudio = time.Time{}
 	g.lastDeviceDownlinkAudio = time.Time{}
+	g.lastDeviceDownlinkPacket = time.Time{}
 	g.deviceUplinkLogged = false
 	g.deviceDownlinkLogged = false
 	g.deviceUplinkFrames = 0
@@ -457,11 +459,11 @@ func (g *gateway) recoverStalledDeviceVoice(status browserStatus) {
 	now := time.Now()
 	g.audioMu.RLock()
 	lastUplink := g.lastDeviceUplinkAudio
-	lastDownlink := g.lastDeviceDownlinkAudio
+	lastDownlinkPacket := g.lastDeviceDownlinkPacket
 	lastRecovery := g.lastVoiceRecovery
 	g.audioMu.RUnlock()
 	if lastUplink.IsZero() || now.Sub(lastUplink) < deviceAudioStallAfter ||
-		(!lastDownlink.IsZero() && now.Sub(lastDownlink) < deviceAudioStallAfter) ||
+		(!lastDownlinkPacket.IsZero() && now.Sub(lastDownlinkPacket) < deviceAudioStallAfter) ||
 		(!lastRecovery.IsZero() && now.Sub(lastRecovery) < voiceRecoveryCooldown) {
 		return
 	}
@@ -472,7 +474,7 @@ func (g *gateway) recoverStalledDeviceVoice(status browserStatus) {
 	}
 	g.lastVoiceRecovery = now
 	g.audioMu.Unlock()
-	log.Printf("recovering stalled device Voice: no PCMA response for %s after microphone activity", deviceAudioStallAfter)
+	log.Printf("recovering stalled device Voice: no downlink PCMA packets for %s after microphone activity", deviceAudioStallAfter)
 	g.closeActivePeer()
 	g.stopBrowserVoice("device audio stalled")
 }
@@ -683,6 +685,7 @@ func (g *gateway) installPeer(
 	g.audioMu.Lock()
 	g.lastDeviceUplinkAudio = time.Time{}
 	g.lastDeviceDownlinkAudio = time.Time{}
+	g.lastDeviceDownlinkPacket = time.Time{}
 	g.lastVoiceRecovery = time.Time{}
 	g.deviceUplinkLogged = false
 	g.deviceDownlinkLogged = false
@@ -781,6 +784,7 @@ func (g *gateway) forwardAudio(connection *net.UDPConn, audioMode string) {
 					g.audioMu.Lock()
 					g.deviceDownlinkFrames++
 					g.deviceDownlinkBytes += uint64(len(packet.Payload))
+					g.lastDeviceDownlinkPacket = time.Now()
 					if pcmaHasSignal(packet.Payload) {
 						g.lastDeviceDownlinkAudio = time.Now()
 						if !g.deviceDownlinkLogged {

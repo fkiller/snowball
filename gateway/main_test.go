@@ -118,6 +118,42 @@ func TestRecoverStalledDeviceVoiceClosesPeerAndStopsBrowserVoice(t *testing.T) {
 	}
 }
 
+func TestRecoverStalledDeviceVoiceAcceptsContinuousSilentDownlink(t *testing.T) {
+	stopCalls := 0
+	browser := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		stopCalls++
+		writeJSON(w, http.StatusOK, browserStatus{State: "ready", Authenticated: true})
+	}))
+	defer browser.Close()
+
+	peer, err := webrtc.NewPeerConnection(webrtc.Configuration{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer peer.Close()
+	gateway := &gateway{
+		cfg:                      config{BrowserController: browser.URL},
+		httpClient:               browser.Client(),
+		peer:                     peer,
+		peerConnected:            true,
+		peerDeviceFingerprint:    "device-fingerprint",
+		peerDeviceVoiceStarted:   true,
+		peerAudioMode:            "pcma",
+		lastDeviceUplinkAudio:    time.Now().Add(-deviceAudioStallAfter - time.Second),
+		lastDeviceDownlinkAudio:  time.Time{},
+		lastDeviceDownlinkPacket: time.Now(),
+	}
+
+	gateway.recoverStalledDeviceVoice(browserStatus{VoiceActive: true})
+
+	if stopCalls != 0 {
+		t.Fatalf("continuous silent RTP incorrectly stopped browser Voice %d times", stopCalls)
+	}
+	if gateway.peer != peer || !gateway.peerConnected {
+		t.Fatal("healthy silent downlink transport was closed")
+	}
+}
+
 func TestDeviceVoiceStatusRequiresTwoInactiveObservations(t *testing.T) {
 	gateway := &gateway{
 		peerDeviceFingerprint:  "device-fingerprint",

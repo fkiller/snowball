@@ -2,16 +2,17 @@
 
 ## Status
 
-The source contains a locally built candidate for the remaining ESP32
-full-duplex starvation problem. It has passed deterministic virtual-time and
-Pion WebRTC tests, but it has **not** been flashed to the physical board or
-deployed to the production router. The running router image remains
-`snowball-voice:0.3.8-nojitter`; the physical board remains on firmware commit
-`705af7b`.
+The reproduced long-session cutoff is fixed and physically verified. Gateway
+image `snowball-voice:0.3.10-full-duplex` is healthy in production and the
+matching final firmware is flashed on the physical ESP32-S3. A 10 minute
+30 second continuous bidirectional PCMA run completed with zero queue drops,
+zero send `WOULD_BLOCK`, bounded queues, and no unplanned peer closure. The
+broader acoustic release gates (ordinary spoken wake/barge-in cycles and a
+30-minute physical run) remain separate follow-up validation.
 
 ## What was actually failing
 
-There were two independent latency mechanisms in series.
+There were three independent failure mechanisms in series.
 
 1. The former Gateway uplink pipeline put a GStreamer `rtpjitterbuffer` after
    Pion had already terminated the Wi-Fi WebRTC transport. On loopback, without
@@ -24,6 +25,14 @@ There were two independent latency mechanisms in series.
    queued 32 ms microphone frames only after the receive loop returns. A steady
    downlink therefore creates head-of-line blocking and starves microphone
    transmission even when CPU and RAM are otherwise healthy.
+3. Once the ESP32 starvation was removed, a Gateway recovery watchdog exposed
+   a separate deterministic cutoff. It treated only *non-silent* PCMA payloads
+   as downlink liveness. ChatGPT Voice continuously sends valid 20 ms RTP
+   packets while quiet, but those packets did not update
+   `lastDeviceDownlinkAudio`. After two minutes of microphone activity the
+   watchdog therefore closed a healthy peer as "stalled." The fix tracks
+   `lastDeviceDownlinkPacket` after every successful current-peer RTP write and
+   reserves `lastDeviceDownlinkAudio` for signal telemetry.
 
 The second mechanism is confirmed by the `libpeer_default.a` call chain:
 
@@ -61,15 +70,23 @@ no monotonic heap-collapse signature. Memory capacity was therefore not the
 cause of this cutoff, although stack and allocation headroom remain acceptance
 gates.
 
-The historical router logs for these sessions were lost when that container was
-replaced, so the final browser-side reason cannot be proven retrospectively.
-The supported inference is that degraded/absent microphone delivery first made
-the conversation unusable; an authoritative browser-idle observation or peer
-closure then closed the Gateway peer, which the ESP32 surfaced as
-`dtls_srtp_read failed`. The new cross-end counters are intended to make that
-last causal step directly observable on the next physical run.
+The historical router logs for those old sessions were lost when that container
+was replaced. The instrumented physical candidate made the remaining boundary
+directly observable:
 
-## Candidate architecture
+| Physical run | Result | ESP32 counters | Gateway counters |
+| --- | --- | --- | --- |
+| Decoupled ESP32 + old watchdog | Forced close at 2m23s; Gateway logged `no PCMA response for 2m0s` | uplink sent 4,436, downlink received/played 7,052/7,052, drops 0 | uplink 4,390, downlink 7,058 |
+| Decoupled ESP32 + packet-liveness watchdog | Operator stop after 10m30s; no recovery or unplanned close | uplink 19,539/19,673 generated, 133 intentionally skipped before browser-ready; downlink 31,351/31,357; drops 0 | uplink 19,539 exactly; downlink 31,615 including packets sent while disconnect propagated |
+
+The passing run reached uplink/downlink queue high-water marks of 4/8 and 6/8,
+respectively. Maximum codec playback time was 32.212 ms and playback-task stack
+low-water was 3,700 bytes. The automated trace quality gate passed with no
+panic or unexpected reset. This both rules out ESP32 throughput exhaustion in
+the tested load and proves that the two-minute termination was the Gateway
+liveness-classification defect.
+
+## Deployed architecture
 
 The receive callback now performs only a bounded copy into an eight-packet
 sliding queue. A dedicated priority-5 playback task performs A-law decode and
@@ -135,23 +152,32 @@ replay, and exercises real bidirectional RTP rather than signaling alone.
 
 ## Physical acceptance
 
-Do not call this fixed until a candidate is flashed without touching NVS and
-all of the following pass:
+The transport-continuity gate for the reproduced cutoff has passed. The USB
+test trigger used only to enter the normal wake -> command -> WebRTC media path
+was removed before the final build and flash. NVS at `0x9000` was never
+addressed.
 
-1. Three ordinary wake/converse/end cycles with no panic, watchdog, overlapping
-   playback task, or TLS memory-gate failure.
-2. One continuous 10-minute full-duplex conversation, including repeated
-   barge-in while ChatGPT is speaking, followed by a clean `Hi ESP` end.
-3. One 30-minute session or equivalent unattended audio soak if the 10-minute
-   run is clean.
-4. During steady state, ESP32 uplink drops remain below 1%, downlink drops remain
+- **PASS:** one continuous 10m30s physical full-duplex transport run.
+- **PASS:** no panic, watchdog, TLS memory-gate failure, task overlap, or
+  unplanned DTLS closure.
+- **PASS:** steady-state uplink/downlink drops under 1% (both were zero),
+  playback under 100 ms (32.212 ms), and stack headroom over 1 KiB (3.7 KiB).
+- **PASS:** ESP32 uplink count exactly matched the Gateway; downlink difference
+  was confined to packets sent while the deliberate close propagated.
+- **PENDING:** three ordinary spoken wake/converse/end cycles including acoustic
+  barge-in and `Hi ESP` end behavior.
+- **PENDING:** one 30-minute physical run for additional soak confidence.
+
+For subsequent release validation, retain these gates:
+
+1. During steady state, ESP32 uplink drops remain below 1%, downlink drops remain
    below 1%, playback writes stay below 100 ms, and playback stack low-water
    remains at least 1,024 bytes. The normal target is zero drops.
-5. ESP32 `uplink_sent` agrees with Gateway `uplinkFrames`, and Gateway
+2. ESP32 `uplink_sent` agrees with Gateway `uplinkFrames`, and Gateway
    `downlinkFrames` agrees with ESP32 `downlink_received`, allowing only packets
    already in flight at shutdown. A mismatch localizes loss to the Wi-Fi/DTLS
    boundary instead of the codec or browser bridge.
-6. Internal largest-block and PSRAM-largest-block measurements do not trend
+3. Internal largest-block and PSRAM-largest-block measurements do not trend
    downward across consecutive sessions.
 
 `tools/esp32-voice-trace-report.sh` now reports these media metrics and fails a
