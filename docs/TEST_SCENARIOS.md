@@ -77,7 +77,14 @@ from the board and Gateway checks above.
    open.
 8. End Voice and confirm the browser, Gateway peer, on-demand audio pipelines,
    and board all return to idle/WakeNet state.
-9. Leave the board idle for at least 20 minutes, then inspect the USB trace:
+9. Keep one session in continuous full-duplex use for at least 10 minutes. Talk
+   while ChatGPT is speaking several times, and verify that recognition and
+   interruption latency do not grow with elapsed time.
+10. Compare the final ESP32 media totals with the Gateway `/api/status` or peer
+   close totals. Uplink and downlink counts should agree apart from packets in
+   flight at shutdown; sustained drops above 1%, a playback write above 100 ms,
+   or playback stack low-water below 1 KiB fails the run.
+11. Leave the board idle for at least 20 minutes, then inspect the USB trace:
    the boot log must include `PSRAM cache-safety enabled` and there must be no
    `Guru Meditation`, `Cache disabled but cached memory region accessed`, or
    unexpected reset before another `Hi ESP` attempt.
@@ -176,8 +183,10 @@ snowball-esp32-debug watch
 
 `report 3` selects the most recent collector session and requires three
 complete wake→command→media→terminal→media-end cycles. It prints each attempt
-with its semantic command and terminal detail, flags cache/watchdog faults, and
-returns non-zero until the requested acceptance count is actually present.
+with its semantic command, terminal detail, transport delivery ratios, queue
+drops, codec-write maximum, and playback stack headroom. It flags
+cache/watchdog/media-quality faults and returns non-zero until the requested
+acceptance count is actually present.
 Pass an explicit collector session as the second argument to
 `esp32-voice-trace-report.sh` when reviewing an archived run; do not mix a
 pre-fix session with the current firmware.

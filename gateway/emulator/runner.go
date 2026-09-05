@@ -28,11 +28,50 @@ func (r *Runner) RunScenario(sc Scenario) ScenarioResult {
 
 	// Step 1: Synthesize all scenario audio frames
 	allFrames := GenerateScenarioFrames(sc.AudioTimeline)
+	captureStop := make(chan struct{})
+	captureDone := make(chan int, 1)
+	go func() {
+		ticker := time.NewTicker(FrameDurationMs * time.Millisecond)
+		defer ticker.Stop()
+		frameIndex := 0
+		for frameIndex < len(allFrames) {
+			select {
+			case <-captureStop:
+				captureDone <- frameIndex
+				return
+			default:
+			}
+			r.client.preVoiceBuf.Push(allFrames[frameIndex])
+			frameIndex++
+			select {
+			case <-captureStop:
+				captureDone <- frameIndex
+				return
+			case <-ticker.C:
+			}
+		}
+		captureDone <- frameIndex
+	}()
+	stopCapture := func() int {
+		close(captureStop)
+		return <-captureDone
+	}
+
+	// Command-tail resolution and microphone capture start with the wake, just
+	// as they do on the physical device; neither waits for WebRTC negotiation.
+	commandResolved := make(chan struct{})
+	go func() {
+		if sc.TailDelay > 0 {
+			time.Sleep(sc.TailDelay)
+		}
+		close(commandResolved)
+	}()
 
 	// Step 2: Concurrently start media session (CONNECTING)
 	mediaStart := time.Now()
 	media, err := r.client.StartMediaSession()
 	if err != nil {
+		_ = stopCapture()
 		result.Error = fmt.Sprintf("start media session failed: %v", err)
 		result.Duration = time.Since(start)
 		result.States = r.client.GetTransitions()
@@ -43,32 +82,12 @@ func (r *Runner) RunScenario(sc Scenario) ScenarioResult {
 	result.TimeToConnect = time.Since(mediaStart)
 	r.client.transitionTo(StateConnecting, "media session connected")
 
-	// Step 3: During connection / tail resolution, push initial frames into pre-voice buffer
-	// Simulate user speaking while connection / command resolution takes place
-	commandResolved := make(chan struct{})
-	go func() {
-		if sc.TailDelay > 0 {
-			time.Sleep(sc.TailDelay)
-		}
-		close(commandResolved)
-	}()
-
-	// Feed audio frames into pre-voice buffer until command tail resolves
-	frameIndex := 0
-	for {
-		select {
-		case <-commandResolved:
-			goto CommandReady
-		default:
-			if frameIndex < len(allFrames) {
-				r.client.preVoiceBuf.Push(allFrames[frameIndex])
-				frameIndex++
-			}
-			time.Sleep(FrameDurationMs * time.Millisecond)
-		}
+	// Step 3: Wait for the command tail if WebRTC happened to connect first.
+	<-commandResolved
+	if sc.BrowserReadyDelay > 0 {
+		time.Sleep(sc.BrowserReadyDelay)
 	}
 
-CommandReady:
 	// Step 4: Submit command event and poll for terminal receipt
 	commandCounter := r.client.identityMgr.NextCounter()
 	cmdStart := time.Now()
@@ -96,6 +115,7 @@ CommandReady:
 		commandCounter,
 	)
 	if err != nil {
+		_ = stopCapture()
 		result.Error = fmt.Sprintf("command dispatch failed: %v", err)
 		result.Duration = time.Since(start)
 		result.States = r.client.GetTransitions()
@@ -105,13 +125,15 @@ CommandReady:
 	result.TimeToExecuted = time.Since(cmdStart)
 	result.Receipt = receipt
 	r.client.transitionTo(StateConversation, "terminal receipt executed")
+	frameIndex := stopCapture()
 
-	// Step 5: Drain preserved frames from pre-voice buffer with 40ms pacing
+	// Step 5: Drain only the physical firmware's latest 15 preserved frames.
 	preserved, dropped, _ := r.client.preVoiceBuf.Stats()
 	result.PreservedFrames = preserved
 	result.DroppedFrames = dropped
+	_, result.SkippedFrames = r.client.preVoiceBuf.PrepareReplay()
 
-	replayed := r.client.preVoiceBuf.DrainPaced(func(frame []byte) {
+	replayed := r.client.preVoiceBuf.DrainImmediate(func(frame []byte) {
 		_ = media.SendFrame(frame)
 	})
 	result.ReplayedFrames = replayed
@@ -123,6 +145,9 @@ CommandReady:
 		sent := media.SendFrames(remainingFrames, nil)
 		result.UplinkFramesSent += sent
 	}
+	// Give the asynchronous remote track a short bounded interval to make its
+	// first packet observable in short scenarios.
+	_ = media.WaitForDownlink(1, 200*time.Millisecond)
 
 	// Step 7: Handle in-conversation session end if configured
 	if sc.EndSessionAfter > 0 {

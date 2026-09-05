@@ -53,15 +53,16 @@ type AudioSegment struct {
 
 // Scenario represents a declarative test scenario to execute.
 type Scenario struct {
-	Name            string         // Descriptive identifier (e.g. "bare-wake-default-chat")
-	WakeWord        string         // Wake phrase ("hi_esp")
-	Command         string         // Command ("new_chat", "resume", "voice", "project", "")
-	Target          string         // Command target ("chatgpt", "codex", "")
-	TargetName      string         // Target voice or project name
-	Confidence      float64        // Recognition confidence (e.g. 1.0)
-	TailDelay       time.Duration  // Delay before resolving command tail (e.g. 1.8s)
-	AudioTimeline   []AudioSegment // Audio played during connection / conversation
-	EndSessionAfter time.Duration  // Time to send in-conversation session end (0 to disable)
+	Name              string         // Descriptive identifier (e.g. "bare-wake-default-chat")
+	WakeWord          string         // Wake phrase ("hi_esp")
+	Command           string         // Command ("new_chat", "resume", "voice", "project", "")
+	Target            string         // Command target ("chatgpt", "codex", "")
+	TargetName        string         // Target voice or project name
+	Confidence        float64        // Recognition confidence (e.g. 1.0)
+	TailDelay         time.Duration  // Delay before resolving command tail (e.g. 1.8s)
+	BrowserReadyDelay time.Duration  // Additional delay before authoritative browser-ready receipt
+	AudioTimeline     []AudioSegment // Audio played during connection / conversation
+	EndSessionAfter   time.Duration  // Time to send in-conversation session end (0 to disable)
 
 	// Expectations for verification
 	ExpectedStatus          int  // Expected HTTP status for terminal receipt (200)
@@ -82,6 +83,7 @@ type ScenarioResult struct {
 	// Pre-Voice buffer metrics
 	PreservedFrames int `json:"preservedFrames"`
 	DroppedFrames   int `json:"droppedFrames"`
+	SkippedFrames   int `json:"skippedFrames"`
 	ReplayedFrames  int `json:"replayedFrames"`
 
 	// Media metrics

@@ -136,6 +136,10 @@ type gateway struct {
 	lastVoiceRecovery       time.Time
 	deviceUplinkLogged      bool
 	deviceDownlinkLogged    bool
+	deviceUplinkFrames      uint64
+	deviceUplinkBytes       uint64
+	deviceDownlinkFrames    uint64
+	deviceDownlinkBytes     uint64
 	voiceMu                 sync.Mutex
 
 	pushMu        sync.RWMutex
@@ -319,22 +323,34 @@ func (g *gateway) closeActivePeer() bool {
 	g.deviceVoiceInactiveObservations = 0
 	g.peerAudioMode = ""
 	g.peerConnectedAt = time.Time{}
-	g.peerMu.Unlock()
-	if peer != nil && previousAudioMode == "pcma" {
-		log.Printf(
-			"device media peer closed fingerprint=%s ownedVoice=%t ownedProject=%t connectedFor=%s",
-			shortFingerprint(deviceFingerprint),
-			ownedDeviceVoice,
-			ownedDeviceProject,
-			peerDuration(peerConnectedAt),
-		)
-	}
 	g.audioMu.Lock()
+	uplinkFrames := g.deviceUplinkFrames
+	uplinkBytes := g.deviceUplinkBytes
+	downlinkFrames := g.deviceDownlinkFrames
+	downlinkBytes := g.deviceDownlinkBytes
 	g.lastDeviceUplinkAudio = time.Time{}
 	g.lastDeviceDownlinkAudio = time.Time{}
 	g.deviceUplinkLogged = false
 	g.deviceDownlinkLogged = false
+	g.deviceUplinkFrames = 0
+	g.deviceUplinkBytes = 0
+	g.deviceDownlinkFrames = 0
+	g.deviceDownlinkBytes = 0
 	g.audioMu.Unlock()
+	g.peerMu.Unlock()
+	if peer != nil && previousAudioMode == "pcma" {
+		log.Printf(
+			"device media peer closed fingerprint=%s ownedVoice=%t ownedProject=%t connectedFor=%s uplinkFrames=%d uplinkBytes=%d downlinkFrames=%d downlinkBytes=%d",
+			shortFingerprint(deviceFingerprint),
+			ownedDeviceVoice,
+			ownedDeviceProject,
+			peerDuration(peerConnectedAt),
+			uplinkFrames,
+			uplinkBytes,
+			downlinkFrames,
+			downlinkBytes,
+		)
+	}
 	if previousAudioMode == "pcma" {
 		_ = os.Remove(deviceMediaActivePath)
 	} else if previousAudioMode == "opus" {
@@ -580,18 +596,28 @@ func (g *gateway) installPeer(
 			if err != nil {
 				return
 			}
-			if audioMode == "pcma" && pcmaHasSignal(packet.Payload) {
+			g.peerMu.RLock()
+			currentPeer := g.peer == peer && g.peerAudioMode == audioMode
+			if currentPeer && audioMode == "pcma" {
 				g.audioMu.Lock()
-				g.lastDeviceUplinkAudio = time.Now()
-				if !g.deviceUplinkLogged {
-					g.deviceUplinkLogged = true
-					log.Printf(
-						"device media uplink audio first fingerprint=%s bytes=%d",
-						shortFingerprint(deviceFingerprint),
-						len(packet.Payload),
-					)
+				g.deviceUplinkFrames++
+				g.deviceUplinkBytes += uint64(len(packet.Payload))
+				if pcmaHasSignal(packet.Payload) {
+					g.lastDeviceUplinkAudio = time.Now()
+					if !g.deviceUplinkLogged {
+						g.deviceUplinkLogged = true
+						log.Printf(
+							"device media uplink audio first fingerprint=%s bytes=%d",
+							shortFingerprint(deviceFingerprint),
+							len(packet.Payload),
+						)
+					}
 				}
 				g.audioMu.Unlock()
+			}
+			g.peerMu.RUnlock()
+			if !currentPeer {
+				continue
 			}
 			raw, err := packet.Marshal()
 			if err == nil {
@@ -654,6 +680,17 @@ func (g *gateway) installPeer(
 	oldAudioMode := g.peerAudioMode
 	oldPeerOwnedDeviceVoice := g.peerDeviceFingerprint != "" && g.peerDeviceVoiceStarted
 	oldPeerOwnedDeviceProject := g.peerDeviceFingerprint != "" && g.peerDeviceProjectStarted
+	g.audioMu.Lock()
+	g.lastDeviceUplinkAudio = time.Time{}
+	g.lastDeviceDownlinkAudio = time.Time{}
+	g.lastVoiceRecovery = time.Time{}
+	g.deviceUplinkLogged = false
+	g.deviceDownlinkLogged = false
+	g.deviceUplinkFrames = 0
+	g.deviceUplinkBytes = 0
+	g.deviceDownlinkFrames = 0
+	g.deviceDownlinkBytes = 0
+	g.audioMu.Unlock()
 	g.peer = peer
 	g.outputTrack = outputTrack
 	g.peerAddress = address
@@ -670,13 +707,6 @@ func (g *gateway) installPeer(
 	g.deviceVoiceInactiveObservations = 0
 	g.peerAudioMode = audioMode
 	g.peerMu.Unlock()
-	g.audioMu.Lock()
-	g.lastDeviceUplinkAudio = time.Time{}
-	g.lastDeviceDownlinkAudio = time.Time{}
-	g.lastVoiceRecovery = time.Time{}
-	g.deviceUplinkLogged = false
-	g.deviceDownlinkLogged = false
-	g.audioMu.Unlock()
 	activePath := browserMediaActivePath
 	if audioMode == "pcma" {
 		activePath = deviceMediaActivePath
@@ -744,19 +774,27 @@ func (g *gateway) forwardAudio(connection *net.UDPConn, audioMode string) {
 		currentMode := g.peerAudioMode
 		g.peerMu.RUnlock()
 		if track != nil && connected && currentMode == audioMode {
-			if audioMode == "pcma" && pcmaHasSignal(packet.Payload) {
-				g.audioMu.Lock()
-				g.lastDeviceDownlinkAudio = time.Now()
-				if !g.deviceDownlinkLogged {
-					g.deviceDownlinkLogged = true
-					log.Printf(
-						"device media downlink audio first bytes=%d",
-						len(packet.Payload),
-					)
+			if err := track.WriteRTP(packet); err == nil && audioMode == "pcma" {
+				g.peerMu.RLock()
+				currentTrack := g.outputTrack == track && g.peerConnected && g.peerAudioMode == audioMode
+				if currentTrack {
+					g.audioMu.Lock()
+					g.deviceDownlinkFrames++
+					g.deviceDownlinkBytes += uint64(len(packet.Payload))
+					if pcmaHasSignal(packet.Payload) {
+						g.lastDeviceDownlinkAudio = time.Now()
+						if !g.deviceDownlinkLogged {
+							g.deviceDownlinkLogged = true
+							log.Printf(
+								"device media downlink audio first bytes=%d",
+								len(packet.Payload),
+							)
+						}
+					}
+					g.audioMu.Unlock()
 				}
-				g.audioMu.Unlock()
+				g.peerMu.RUnlock()
 			}
-			_ = track.WriteRTP(packet)
 		}
 	}
 }
@@ -1191,6 +1229,12 @@ func (g *gateway) handleStatus(w http.ResponseWriter, _ *http.Request) {
 	deviceFingerprint := g.peerDeviceFingerprint
 	peerPresent := g.peer != nil
 	g.peerMu.RUnlock()
+	g.audioMu.RLock()
+	deviceUplinkFrames := g.deviceUplinkFrames
+	deviceUplinkBytes := g.deviceUplinkBytes
+	deviceDownlinkFrames := g.deviceDownlinkFrames
+	deviceDownlinkBytes := g.deviceDownlinkBytes
+	g.audioMu.RUnlock()
 	g.pushMu.RLock()
 	subscriberCount := len(g.subscriptions)
 	g.pushMu.RUnlock()
@@ -1209,9 +1253,18 @@ func (g *gateway) handleStatus(w http.ResponseWriter, _ *http.Request) {
 		"gateway":   gatewayState,
 		"browser":   status,
 		"voiceLive": voiceLive,
-		"webrtc":    map[string]any{"connected": connected, "peer": peerAddress, "client": peerKind, "audioMode": audioMode},
-		"push":      map[string]any{"subscribers": subscriberCount},
-		"network":   map[string]any{"lanIp": g.cfg.LANIP, "httpsPort": g.cfg.HTTPSPort, "icePort": g.cfg.ICEPort},
+		"webrtc": map[string]any{
+			"connected":      connected,
+			"peer":           peerAddress,
+			"client":         peerKind,
+			"audioMode":      audioMode,
+			"uplinkFrames":   deviceUplinkFrames,
+			"uplinkBytes":    deviceUplinkBytes,
+			"downlinkFrames": deviceDownlinkFrames,
+			"downlinkBytes":  deviceDownlinkBytes,
+		},
+		"push":    map[string]any{"subscribers": subscriberCount},
+		"network": map[string]any{"lanIp": g.cfg.LANIP, "httpsPort": g.cfg.HTTPSPort, "icePort": g.cfg.ICEPort},
 	})
 }
 

@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pion/rtp"
 	"github.com/pion/webrtc/v4"
 	"snowball.local/voice-gateway/devproto"
 )
@@ -30,6 +31,8 @@ type testGatewayHarness struct {
 	browserMock  *httptest.Server
 	dir          string
 	browserCalls int
+	uplinkFrames int
+	peers        []*webrtc.PeerConnection
 	mu           sync.Mutex
 }
 
@@ -172,16 +175,74 @@ func setupTestGateway(t *testing.T) *testGatewayHarness {
 			ClockRate: 8000,
 			Channels:  1,
 		}
-		downTrack, _ := webrtc.NewTrackLocalStaticRTP(codec, "snowball-output", "snowball")
-		_, _ = peer.AddTrack(downTrack)
+		downTrack, err := webrtc.NewTrackLocalStaticRTP(codec, "snowball-output", "snowball")
+		if err != nil {
+			_ = peer.Close()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		sender, err := peer.AddTrack(downTrack)
+		if err != nil {
+			_ = peer.Close()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		go func() {
+			buffer := make([]byte, 1500)
+			for {
+				if _, _, err := sender.Read(buffer); err != nil {
+					return
+				}
+			}
+		}()
+
+		connected := make(chan struct{})
+		var connectedOnce sync.Once
+		peer.OnConnectionStateChange(func(state webrtc.PeerConnectionState) {
+			if state == webrtc.PeerConnectionStateConnected {
+				connectedOnce.Do(func() { close(connected) })
+			}
+		})
+		peer.OnTrack(func(track *webrtc.TrackRemote, _ *webrtc.RTPReceiver) {
+			for {
+				if _, _, err := track.ReadRTP(); err != nil {
+					return
+				}
+				harness.mu.Lock()
+				harness.uplinkFrames++
+				harness.mu.Unlock()
+			}
+		})
 
 		_ = peer.SetRemoteDescription(webrtc.SessionDescription{
 			Type: webrtc.SDPTypeOffer,
 			SDP:  offerReq.SDP,
 		})
 
-		answer, _ := peer.CreateAnswer(nil)
-		_ = peer.SetLocalDescription(answer)
+		answer, err := peer.CreateAnswer(nil)
+		if err != nil {
+			_ = peer.Close()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		gatherComplete := webrtc.GatheringCompletePromise(peer)
+		if err := peer.SetLocalDescription(answer); err != nil {
+			_ = peer.Close()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		select {
+		case <-gatherComplete:
+		case <-time.After(5 * time.Second):
+			_ = peer.Close()
+			http.Error(w, "ICE gathering timed out", http.StatusGatewayTimeout)
+			return
+		}
+
+		harness.mu.Lock()
+		harness.peers = append(harness.peers, peer)
+		harness.mu.Unlock()
+		go writeTestDownlink(connected, downTrack)
 
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"version": 1,
@@ -214,11 +275,60 @@ func setupTestGateway(t *testing.T) *testGatewayHarness {
 
 	harness.server = httptest.NewServer(mux)
 	t.Cleanup(func() {
+		harness.mu.Lock()
+		peers := append([]*webrtc.PeerConnection(nil), harness.peers...)
+		harness.mu.Unlock()
+		for _, peer := range peers {
+			_ = peer.Close()
+		}
 		harness.server.Close()
 		harness.browserMock.Close()
 	})
 
 	return harness
+}
+
+func writeTestDownlink(connected <-chan struct{}, track *webrtc.TrackLocalStaticRTP) {
+	select {
+	case <-connected:
+	case <-time.After(5 * time.Second):
+		return
+	}
+	payload := make([]byte, 160)
+	for index := range payload {
+		value := int16(4000)
+		if (index/20)%2 != 0 {
+			value = -value
+		}
+		payload[index] = LinearToALaw(value)
+	}
+	sequence := uint16(0)
+	timestamp := uint32(0)
+	write := func() bool {
+		packet := &rtp.Packet{
+			Header: rtp.Header{
+				Version:        2,
+				PayloadType:    8,
+				SequenceNumber: sequence,
+				Timestamp:      timestamp,
+				SSRC:           0x87654321,
+			},
+			Payload: payload,
+		}
+		sequence++
+		timestamp += 160
+		return track.WriteRTP(packet) == nil
+	}
+	if !write() {
+		return
+	}
+	ticker := time.NewTicker(20 * time.Millisecond)
+	defer ticker.Stop()
+	for range ticker.C {
+		if !write() {
+			return
+		}
+	}
 }
 
 // --- Unit Tests ---
@@ -262,11 +372,13 @@ func TestSyntheticGenerators(t *testing.T) {
 	// 4. A-law conversion & frame chunking
 	alaw := PCM16ToALaw8k(tone, SampleRate8k)
 	frames := ChunkALawIntoFrames(alaw)
-	if len(frames) != 3 { // 800 bytes / 320 bytes per frame = 3 frames (with padding on last)
-		t.Fatalf("frame count: got %d, want 3", len(frames))
+	if len(frames) != 4 { // 800 bytes / 256 bytes per frame = 4 frames (with padding on last)
+		t.Fatalf("frame count: got %d, want 4", len(frames))
 	}
-	if len(frames[0]) != 320 || len(frames[1]) != 320 || len(frames[2]) != 320 {
-		t.Fatal("frame size is not exactly 320 bytes")
+	for index, frame := range frames {
+		if len(frame) != FrameBytes8k {
+			t.Fatalf("frame %d size: got %d, want %d", index, len(frame), FrameBytes8k)
+		}
 	}
 
 	// 5. Signal detection
@@ -289,8 +401,8 @@ func TestSyntheticGenerators(t *testing.T) {
 func TestPreVoiceBufferPreservationAndOverflow(t *testing.T) {
 	buf := NewPreVoiceBuffer()
 
-	// Fill exactly 200 frames (8.0s)
-	frame := make([]byte, 320)
+	// Fill exactly 200 physical frames (6.4s)
+	frame := make([]byte, FrameBytes8k)
 	for i := 0; i < 200; i++ {
 		frame[0] = byte(i)
 		if !buf.Push(frame) {
@@ -303,26 +415,33 @@ func TestPreVoiceBufferPreservationAndOverflow(t *testing.T) {
 		t.Fatalf("expected 200 preserved, 0 dropped: got preserved=%d dropped=%d remaining=%d", preserved, dropped, remaining)
 	}
 
-	// Push 25 additional frames (overflow)
+	// Push 25 additional frames. Firmware retains each newest frame and
+	// overwrites the oldest instead of rejecting the new audio.
 	for i := 0; i < 25; i++ {
-		if buf.Push(frame) {
-			t.Fatalf("overflow frame %d was unexpectedly accepted", i)
+		frame[0] = byte(200 + i)
+		if !buf.Push(frame) {
+			t.Fatalf("rolling frame %d was unexpectedly rejected", i)
 		}
 	}
 
 	preserved, dropped, remaining = buf.Stats()
-	if preserved != 200 || dropped != 25 || remaining != 200 {
-		t.Fatalf("expected 200 preserved, 25 dropped: got preserved=%d dropped=%d remaining=%d", preserved, dropped, remaining)
+	if preserved != 225 || dropped != 25 || remaining != 200 {
+		t.Fatalf("expected 225 captured, 25 overwritten, 200 retained: got captured=%d overwritten=%d remaining=%d", preserved, dropped, remaining)
 	}
 
-	// Drain frames in FIFO order
-	for i := 0; i < 200; i++ {
+	selected, skipped := buf.PrepareReplay()
+	if selected != PreVoiceReplayFrames || skipped != 185 {
+		t.Fatalf("replay selection mismatch: selected=%d skipped=%d", selected, skipped)
+	}
+	// The physical fast drain selects the latest 15 retained frames.
+	for i := 0; i < PreVoiceReplayFrames; i++ {
 		f := buf.PopNext()
 		if f == nil {
 			t.Fatalf("frame %d was nil on pop", i)
 		}
-		if f[0] != byte(i) {
-			t.Fatalf("FIFO order violated at %d: got %d", i, f[0])
+		want := byte(210 + i)
+		if f[0] != want {
+			t.Fatalf("latest-window order violated at %d: got %d, want %d", i, f[0], want)
 		}
 	}
 
@@ -392,22 +511,22 @@ func TestScenarioMatrix(t *testing.T) {
 
 	scenarios := []Scenario{
 		{
-			Name:       "TC-01-bare-wake-default-chat",
-			WakeWord:   "hi_esp",
-			Command:    "new_chat",
-			Target:     "chatgpt",
-			TailDelay:  100 * time.Millisecond,
+			Name:      "TC-01-bare-wake-default-chat",
+			WakeWord:  "hi_esp",
+			Command:   "new_chat",
+			Target:    "chatgpt",
+			TailDelay: 100 * time.Millisecond,
 			AudioTimeline: []AudioSegment{
 				{Kind: "speech", Duration: 500 * time.Millisecond, Amplitude: 0.8},
 			},
 			ExpectedStatus: 200,
 		},
 		{
-			Name:       "TC-02-wake-resume-command",
-			WakeWord:   "hi_esp",
-			Command:    "resume",
-			Target:     "chatgpt",
-			TailDelay:  0,
+			Name:      "TC-02-wake-resume-command",
+			WakeWord:  "hi_esp",
+			Command:   "resume",
+			Target:    "chatgpt",
+			TailDelay: 0,
 			AudioTimeline: []AudioSegment{
 				{Kind: "speech", Duration: 300 * time.Millisecond, Amplitude: 0.8},
 			},
@@ -426,33 +545,34 @@ func TestScenarioMatrix(t *testing.T) {
 			ExpectedStatus: 200,
 		},
 		{
-			Name:       "TC-04-prevoice-preservation-fit",
-			WakeWord:   "hi_esp",
-			Command:    "new_chat",
-			Target:     "chatgpt",
-			TailDelay:  120 * time.Millisecond,
+			Name:      "TC-04-prevoice-preservation-fit",
+			WakeWord:  "hi_esp",
+			Command:   "new_chat",
+			Target:    "chatgpt",
+			TailDelay: 120 * time.Millisecond,
 			AudioTimeline: []AudioSegment{
-				{Kind: "speech", Duration: 3000 * time.Millisecond, Amplitude: 0.8}, // 75 frames < 200
+				{Kind: "speech", Duration: 3000 * time.Millisecond, Amplitude: 0.8}, // 94 frames < 200
 			},
 			ExpectedStatus: 200,
 		},
 		{
-			Name:       "TC-05-prevoice-buffer-overflow",
-			WakeWord:   "hi_esp",
-			Command:    "new_chat",
-			Target:     "chatgpt",
-			TailDelay:  200 * time.Millisecond,
+			Name:              "TC-05-prevoice-buffer-overflow",
+			WakeWord:          "hi_esp",
+			Command:           "new_chat",
+			Target:            "chatgpt",
+			TailDelay:         200 * time.Millisecond,
+			BrowserReadyDelay: 7 * time.Second,
 			AudioTimeline: []AudioSegment{
-				{Kind: "speech", Duration: 9000 * time.Millisecond, Amplitude: 0.8}, // 225 frames > 200
+				{Kind: "speech", Duration: 9000 * time.Millisecond, Amplitude: 0.8}, // 282 frames > 200
 			},
 			ExpectedStatus: 200,
 		},
 		{
-			Name:            "TC-06-conversation-session-end",
-			WakeWord:        "hi_esp",
-			Command:         "new_chat",
-			Target:          "chatgpt",
-			TailDelay:       50 * time.Millisecond,
+			Name:      "TC-06-conversation-session-end",
+			WakeWord:  "hi_esp",
+			Command:   "new_chat",
+			Target:    "chatgpt",
+			TailDelay: 50 * time.Millisecond,
 			AudioTimeline: []AudioSegment{
 				{Kind: "speech", Duration: 500 * time.Millisecond, Amplitude: 0.8},
 			},
@@ -467,6 +587,14 @@ func TestScenarioMatrix(t *testing.T) {
 			suiteResults = append(suiteResults, res)
 			if !res.Passed {
 				t.Fatalf("scenario %s failed: %s", sc.Name, res.Error)
+			}
+			if res.DownlinkFramesRecv == 0 || res.DownlinkSignalFrames == 0 {
+				t.Fatalf("scenario %s did not exercise downlink audio: %+v", sc.Name, res)
+			}
+			if sc.Name == "TC-05-prevoice-buffer-overflow" {
+				if res.DroppedFrames == 0 || res.SkippedFrames != 185 || res.ReplayedFrames != PreVoiceReplayFrames {
+					t.Fatalf("overflow scenario did not exercise the rolling replay window: %+v", res)
+				}
 			}
 		})
 	}

@@ -11,11 +11,20 @@ Measured after the current WakeNet command-tail candidate is ready:
 
 | Resource | Measurement | Gate |
 | --- | ---: | --- |
-| App image (cache-safe command-tail candidate) | `0x21fef0` bytes | below the `0x300000` app partition |
-| Static DIRAM (cache-safe command-tail candidate) | 173,615 / 341,760 bytes | keep at least 64 KiB free |
+| App image (full-duplex decoupling candidate) | `0x221da9` bytes | below the `0x300000` app partition (28.9% free) |
+| Static DIRAM (full-duplex decoupling candidate) | 173,767 / 341,760 bytes | keep at least 64 KiB free |
 | Internal largest block after speech | 31,744 bytes | at least 16 KiB before TLS |
 | PSRAM largest block after speech | 2,621,440 bytes | at least 128 KiB before TLS |
 | SR model partition | 3,052,232 / 6 MiB | keep the 6 MiB partition |
+
+The full-duplex candidate deliberately trades a small, bounded amount of
+internal memory for scheduler independence. The old 32-frame uplink queue used
+about 10.5 KiB of item storage. The candidate uses two eight-frame queues (about
+2.6 KiB each) plus an 8 KiB playback-task stack, a net increase of roughly
+3 KiB before queue control structures. The 200-frame pre-Voice ring remains
+about 65.6 KiB in PSRAM. The codec conversion array was reduced from 5 KiB to
+2.5 KiB, and physical acceptance records the playback task's actual stack
+low-water mark rather than assuming the allocation is sufficient.
 
 The ESP-IDF heap policy keeps only allocations up to 4 KiB internal
 (`CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=4096`).  This is intentional: the

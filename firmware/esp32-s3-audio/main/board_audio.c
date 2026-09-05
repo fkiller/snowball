@@ -634,21 +634,30 @@ esp_err_t board_audio_stream_write_pcm8k(const int16_t *samples, size_t sample_c
     portEXIT_CRITICAL(&feedback_lock);
     if (!active) return ESP_ERR_INVALID_STATE;
 
-    int32_t frames[320 * 2 * 2];
-    for (size_t sample = 0; sample < sample_count; ++sample) {
-        /* Multiplication is defined for negative PCM samples; left-shifting a
-         * negative signed integer is undefined behavior in C. */
-        int32_t value = (int32_t)samples[sample] * 65536;
-        size_t frame = sample * 2;
-        frames[frame * 2] = value;
-        frames[frame * 2 + 1] = value;
-        frames[(frame + 1) * 2] = value;
-        frames[(frame + 1) * 2 + 1] = value;
-    }
+    /* The normal Gateway packet is 160 samples. Keeping the conversion block
+     * at that size avoids a permanent 5 KiB stack array in the dedicated
+     * playback task while still requiring only one codec write per packet. */
+    int32_t frames[160 * 2 * 2];
     if (xSemaphoreTake(output_mutex, pdMS_TO_TICKS(250)) != pdTRUE) return ESP_ERR_TIMEOUT;
-    esp_err_t result = output_open
-        ? esp_codec_dev_write(output_device, frames, (int)(sample_count * 4 * sizeof(*frames)))
-        : ESP_ERR_INVALID_STATE;
+    esp_err_t result = output_open ? ESP_OK : ESP_ERR_INVALID_STATE;
+    for (size_t offset = 0; result == ESP_OK && offset < sample_count; offset += 160) {
+        size_t block_samples = sample_count - offset < 160 ? sample_count - offset : 160;
+        for (size_t sample = 0; sample < block_samples; ++sample) {
+            /* Multiplication is defined for negative PCM samples;
+             * left-shifting a negative signed integer is not. */
+            int32_t value = (int32_t)samples[offset + sample] * 65536;
+            size_t frame = sample * 2;
+            frames[frame * 2] = value;
+            frames[frame * 2 + 1] = value;
+            frames[(frame + 1) * 2] = value;
+            frames[(frame + 1) * 2 + 1] = value;
+        }
+        result = esp_codec_dev_write(
+            output_device,
+            frames,
+            (int)(block_samples * 4 * sizeof(*frames))
+        );
+    }
     xSemaphoreGive(output_mutex);
     memset(frames, 0, sizeof(frames));
     return result;

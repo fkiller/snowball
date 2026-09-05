@@ -91,7 +91,9 @@ ordering:
 6. verify that Gateway and browser state return to idle.
 
 Convert 16 kHz fixture PCM to 8 kHz G.711 A-law using a tested implementation.
-Preserve the firmware's 40 ms pacing instead of sending audio in a burst.
+Preserve the physical firmware's 32 ms/256-byte live pacing. Only the bounded
+latest-15 pre-Voice replay is intentionally sent without pacing, matching the
+firmware's browser-ready behavior.
 
 ### 4. Scenario manifest and audio fixtures
 
@@ -106,7 +108,7 @@ The initial matrix is:
 - `Hi ESP Resume`, then `Hello`;
 - `Hi ESP with Cove`, then `Hello`;
 - wake followed immediately by speech;
-- wake followed by 0, 0.5, 1.8, 3, 8, and 9 seconds of delay;
+- wake followed by 0, 0.5, 1.8, 3, 6.4, and 7 seconds of delay;
 - wake without a message and explicit session termination;
 - duplicate receipt polling, stale counter, fresh boot nonce, revoked device;
 - packet delay, loss, duplication, reordering, and command-response loss.
@@ -118,9 +120,11 @@ artifact directories.
 ### 5. Pre-Voice preservation
 
 Mirror the firmware's bounded pre-Voice behavior. Audio captured after command
-resolution but before the Gateway confirms browser Voice should be retained
-and replayed at its original 40 ms cadence. The current firmware candidate has
-an eight-second capacity, so the 8/9-second boundary is a required regression.
+resolution but before the Gateway confirms browser Voice is stored in a rolling
+200-frame buffer. Physical frames are 32 ms, so capacity is 6.4 seconds. On the
+browser-ready receipt, retain the newest data on overflow, select the latest 15
+frames (480 ms), and replay that window immediately before resuming live 32 ms
+pacing. The 6.4/7-second boundary is a required regression.
 
 The report must distinguish:
 

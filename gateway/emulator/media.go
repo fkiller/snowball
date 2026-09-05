@@ -208,10 +208,10 @@ func (s *MediaSession) ExchangeOffer(
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	return nil
+	return errors.New("WebRTC connection timed out")
 }
 
-// SendFrame sends a single 40 ms (320-byte) G.711 A-law frame as an RTP packet.
+// SendFrame sends a single physical 32 ms (256-byte) G.711 A-law frame as an RTP packet.
 func (s *MediaSession) SendFrame(frame []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -232,12 +232,12 @@ func (s *MediaSession) SendFrame(frame []byte) error {
 	}
 
 	s.sequenceNum++
-	s.timestamp += FrameSamples8k // 320 samples per 40ms frame @ 8kHz
+	s.timestamp += FrameSamples8k // 256 samples per 32 ms frame @ 8 kHz
 
 	return s.uplinkTrack.WriteRTP(packet)
 }
 
-// SendFrames streams multiple frames sequentially with accurate 40 ms pacing.
+// SendFrames streams multiple frames sequentially with the physical 32 ms pacing.
 func (s *MediaSession) SendFrames(frames [][]byte, onFrameSent func(index int)) int {
 	sent := 0
 	for i, frame := range frames {
@@ -264,6 +264,22 @@ func (s *MediaSession) GetDownlinkStats() (totalFrames, signalFrames int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return len(s.downlinkAudio), s.signalFrames
+}
+
+// WaitForDownlink waits for a bounded number of received packets. It is used
+// by short tests to observe the asynchronous remote track without fixed sleeps.
+func (s *MediaSession) WaitForDownlink(minimum int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		total, _ := s.GetDownlinkStats()
+		if total >= minimum {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 // IsConnected returns whether the WebRTC connection is active.

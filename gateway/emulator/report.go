@@ -35,7 +35,7 @@ func GenerateMarkdownReport(report SuiteReport) string {
 
 	// Matrix table
 	sb.WriteString("## Scenario Execution Matrix\n\n")
-	sb.WriteString("| Scenario | Result | Duration | Time to Connect | Time to Executed | Pre-Voice Preserved / Dropped | Uplink Sent | Status |\n")
+	sb.WriteString("| Scenario | Result | Duration | Time to Connect | Time to Executed | Pre-Voice Captured / Overwritten / Skipped / Replayed | Uplink Sent | Status |\n")
 	sb.WriteString("|---|---|---|---|---|---|---|---|\n")
 
 	for _, res := range report.Results {
@@ -44,14 +44,14 @@ func GenerateMarkdownReport(report SuiteReport) string {
 			statusIcon = "FAIL"
 		}
 
-		preservedDropped := fmt.Sprintf("%d / %d", res.PreservedFrames, res.DroppedFrames)
+		preVoice := fmt.Sprintf("%d / %d / %d / %d", res.PreservedFrames, res.DroppedFrames, res.SkippedFrames, res.ReplayedFrames)
 		sb.WriteString(fmt.Sprintf("| `%s` | **%s** | %s | %s | %s | %s | %d frames | %d |\n",
 			res.ScenarioName,
 			statusIcon,
 			res.Duration.Round(time.Millisecond),
 			res.TimeToConnect.Round(time.Millisecond),
 			res.TimeToExecuted.Round(time.Millisecond),
-			preservedDropped,
+			preVoice,
 			res.UplinkFramesSent,
 			res.Receipt.Status,
 		))
@@ -68,10 +68,10 @@ func GenerateMarkdownReport(report SuiteReport) string {
 		sb.WriteString(fmt.Sprintf("- **Total Duration:** %s\n", res.Duration.Round(time.Millisecond)))
 		sb.WriteString(fmt.Sprintf("- **WebRTC Connect Time:** %s\n", res.TimeToConnect.Round(time.Millisecond)))
 		sb.WriteString(fmt.Sprintf("- **Command Execution Latency:** %s\n", res.TimeToExecuted.Round(time.Millisecond)))
-		sb.WriteString(fmt.Sprintf("- **Pre-Voice Buffer:** %d frames preserved, %d frames dropped, %d frames replayed\n",
-			res.PreservedFrames, res.DroppedFrames, res.ReplayedFrames))
-		sb.WriteString(fmt.Sprintf("- **Uplink Frames Delivered:** %d frames (%0.2fs audio @ 40ms/frame)\n",
-			res.UplinkFramesSent, float64(res.UplinkFramesSent)*0.040))
+		sb.WriteString(fmt.Sprintf("- **Pre-Voice Buffer:** %d frames captured, %d overwritten, %d intentionally skipped, %d replayed\n",
+			res.PreservedFrames, res.DroppedFrames, res.SkippedFrames, res.ReplayedFrames))
+		sb.WriteString(fmt.Sprintf("- **Uplink Frames Delivered:** %d frames (%0.2fs audio @ 32ms/frame)\n",
+			res.UplinkFramesSent, float64(res.UplinkFramesSent)*0.032))
 		sb.WriteString(fmt.Sprintf("- **Downlink Frames Captured:** %d frames (signal frames: %d)\n",
 			res.DownlinkFramesRecv, res.DownlinkSignalFrames))
 

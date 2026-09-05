@@ -2,14 +2,16 @@ package emulator
 
 import (
 	"sync"
-	"time"
 )
 
 const (
-	// PreVoiceFrameCapacity is the maximum number of 40 ms frames stored in the
-	// pre-Voice buffer (200 frames = 8.0 seconds of audio), matching the ESP32
+	// PreVoiceFrameCapacity is the maximum number of physical 32 ms frames
+	// stored in the pre-Voice buffer (200 frames = 6.4 seconds), matching the ESP32
 	// firmware's MEDIA_PREVOICE_FRAME_CAPACITY.
 	PreVoiceFrameCapacity = 200
+	// PreVoiceReplayFrames is the latest opening-audio window sent when the
+	// authoritative browser receipt arrives (15 frames = 480 ms).
+	PreVoiceReplayFrames = 15
 )
 
 // PreVoiceBuffer holds microphone audio frames captured between wake detection
@@ -18,9 +20,12 @@ type PreVoiceBuffer struct {
 	mu        sync.Mutex
 	capacity  int
 	frames    [][]byte
+	head      int
 	preserved int
 	dropped   int
 	readIndex int
+	remaining int
+	prepared  bool
 }
 
 // NewPreVoiceBuffer creates a PreVoiceBuffer with the standard 200-frame capacity.
@@ -31,21 +36,23 @@ func NewPreVoiceBuffer() *PreVoiceBuffer {
 	}
 }
 
-// Push adds a frame to the pre-Voice buffer while uplink is disabled.
-// If the buffer has reached its capacity, the frame is dropped and counted as overflow.
+// Push adds a frame to the pre-Voice buffer while uplink is disabled. Once
+// full, it replaces the oldest frame so the physical firmware always retains
+// the newest bounded opening rather than stale audio.
 func (b *PreVoiceBuffer) Push(frame []byte) bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if len(b.frames) >= b.capacity {
-		b.dropped++
-		return false
-	}
-
 	frameCopy := make([]byte, len(frame))
 	copy(frameCopy, frame)
-	b.frames = append(b.frames, frameCopy)
 	b.preserved++
+	if len(b.frames) < b.capacity {
+		b.frames = append(b.frames, frameCopy)
+		return true
+	}
+	b.frames[b.head] = frameCopy
+	b.head = (b.head + 1) % b.capacity
+	b.dropped++
 	return true
 }
 
@@ -53,7 +60,27 @@ func (b *PreVoiceBuffer) Push(frame []byte) bool {
 func (b *PreVoiceBuffer) Stats() (preserved, dropped, remaining int) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.preserved, b.dropped, len(b.frames) - b.readIndex
+	remaining = len(b.frames)
+	if b.prepared {
+		remaining = b.remaining
+	}
+	return b.preserved, b.dropped, remaining
+}
+
+// PrepareReplay selects the same latest-15-frame window used by the physical
+// firmware and returns the selected and intentionally skipped counts.
+func (b *PreVoiceBuffer) PrepareReplay() (selected, skipped int) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	selected = len(b.frames)
+	if selected > PreVoiceReplayFrames {
+		selected = PreVoiceReplayFrames
+	}
+	skipped = len(b.frames) - selected
+	b.readIndex = (b.head + skipped) % b.capacity
+	b.remaining = selected
+	b.prepared = true
+	return selected, skipped
 }
 
 // PopNext returns the next preserved frame in FIFO order, or nil when the
@@ -62,17 +89,29 @@ func (b *PreVoiceBuffer) PopNext() []byte {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if b.readIndex >= len(b.frames) {
+	if !b.prepared {
+		selected := len(b.frames)
+		if selected > PreVoiceReplayFrames {
+			selected = PreVoiceReplayFrames
+		}
+		b.readIndex = (b.head + len(b.frames) - selected) % b.capacity
+		b.remaining = selected
+		b.prepared = true
+	}
+	if b.remaining == 0 {
 		return nil
 	}
 	frame := b.frames[b.readIndex]
-	b.readIndex++
+	b.readIndex = (b.readIndex + 1) % b.capacity
+	b.remaining--
 	return frame
 }
 
-// DrainPaced drains all preserved frames into a channel or callback with
-// accurate 40 ms pacing.
-func (b *PreVoiceBuffer) DrainPaced(onFrame func(frame []byte)) int {
+// DrainImmediate mirrors firmware's bounded fast drain into esp_peer. The
+// 480 ms selection fits inside its send pool; live capture therefore resumes
+// without adding another 480 ms of startup latency.
+func (b *PreVoiceBuffer) DrainImmediate(onFrame func(frame []byte)) int {
+	b.PrepareReplay()
 	count := 0
 	for {
 		frame := b.PopNext()
@@ -81,7 +120,6 @@ func (b *PreVoiceBuffer) DrainPaced(onFrame func(frame []byte)) int {
 		}
 		onFrame(frame)
 		count++
-		time.Sleep(FrameDurationMs * time.Millisecond)
 	}
 	return count
 }
@@ -91,7 +129,10 @@ func (b *PreVoiceBuffer) Reset() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.frames = b.frames[:0]
+	b.head = 0
 	b.preserved = 0
 	b.dropped = 0
 	b.readIndex = 0
+	b.remaining = 0
+	b.prepared = false
 }

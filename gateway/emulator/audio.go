@@ -12,12 +12,14 @@ const (
 	SampleRate8k = 8000
 	// SampleRate16k is the raw microphone input sample rate.
 	SampleRate16k = 16000
-	// FrameDurationMs is the duration of one PCMA frame (40 ms).
-	FrameDurationMs = 40
-	// FrameSamples8k is the number of samples in one 40 ms frame at 8 kHz (320 samples).
-	FrameSamples8k = 320
-	// FrameBytes8k is the number of G.711 A-law bytes in one 40 ms frame (320 bytes).
-	FrameBytes8k = 320
+	// FrameDurationMs is the physical ESP32 AFE/uplink cadence. The AFE returns
+	// 512 samples at 16 kHz and firmware downsamples each fetch to 256 PCMA
+	// samples, so one frame is 32 ms rather than the emulator's former 40 ms.
+	FrameDurationMs = 32
+	// FrameSamples8k is the number of samples in one 32 ms frame at 8 kHz.
+	FrameSamples8k = 256
+	// FrameBytes8k is the number of G.711 A-law bytes in one physical frame.
+	FrameBytes8k = 256
 )
 
 // LinearToALaw encodes a 16-bit linear PCM sample to G.711 A-law.
@@ -158,7 +160,8 @@ func PCM16ToALaw8k(samples []int16, inputSampleRate int) []byte {
 	return alaw
 }
 
-// ChunkALawIntoFrames splits an A-law byte slice into 40 ms (320-byte) frames.
+// ChunkALawIntoFrames splits an A-law byte slice into physical 32 ms
+// (256-byte) frames.
 // Any trailing incomplete frame is padded with A-law silence (0xd5).
 func ChunkALawIntoFrames(alaw []byte) [][]byte {
 	if len(alaw) == 0 {
@@ -199,7 +202,7 @@ func HasSignal(payload []byte) bool {
 }
 
 // GenerateScenarioFrames synthesizes an entire audio scenario timeline into
-// sequential 40 ms G.711 A-law frames.
+// sequential 32 ms G.711 A-law frames.
 func GenerateScenarioFrames(timeline []AudioSegment) [][]byte {
 	var allPCM []int16
 	for _, seg := range timeline {
