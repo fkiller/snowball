@@ -1,8 +1,23 @@
 # Public release preparation handoff
 
-**Handoff state: READY** — 2026-10-02 America/New_York.
+**Handoff state: IN PROGRESS** — 2026-10-02 America/New_York.
 
-## Current objective and task
+## Active publication task (2026-10-02)
+
+The user explicitly authorized publishing BOTH products through CI/CD,
+checking the actual pipeline, and making the visitor-facing repository public.
+Work is on `codex/publish-all-releases`, based on merged prep PR #1/main
+`a36f3f7`. New `release.yml` validates exact tag/source, calls all security
+checks, builds and scans both native images, packages locked firmware/all
+platforms, collects exact corresponding source and notices, uploads a draft,
+verifies all download hashes, and publishes the coordinated alpha.
+Existing physical/VM acceptance limitations remain explicit. No production
+restart, daemon migration, physical flashing or eFuse changes are authorized.
+Next: pass the publication PR security gate, merge, make the source public,
+configure protection/reporting, push `v0.4.0-alpha.1`, observe/fix the actual
+release run, then anonymously verify every release asset and repository art.
+
+## Earlier preparation objective and task
 
 Prepare the public Snowball-Voice ESP32 client and Snowball-Voice-Gate Gateway
 repository. User authorized repository updates, MIT for project-authored code

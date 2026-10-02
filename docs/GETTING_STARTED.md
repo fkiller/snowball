@@ -89,8 +89,8 @@ cd snowball
 ```
 
 Before cloning a prerelease by tag, check [Releases](https://github.com/fkiller/snowball/releases)
-and choose an existing tag. `0.4.0-alpha.1` is the prepared release version;
-it is not an assurance that a release/image has been published.
+and choose an existing tag. The coordinated developer-preview tag is `v0.4.0-alpha.1`. Its firmware,
+platform bundles and prebuilt Linux images are published together by CI.
 
 Edit `compose.yaml`:
 
@@ -212,7 +212,7 @@ return to the Snowball repository. Re-export this environment in each new shell.
 
 ### Using a published firmware archive instead of compiling
 
-Once a firmware prerelease actually exists, download its ESP32-S3 `.tar.gz`
+Download the coordinated firmware prerelease ESP32-S3 `.tar.gz`
 and `.sha256` from Releases. Verify the checksum using the commands in the
 [platform guide](PLATFORMS.md#common-release-installation). Check out the
 matching source tag so the protected flash helpers and instructions match.

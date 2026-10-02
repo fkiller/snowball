@@ -59,23 +59,31 @@ for (const file of ["dependencies.lock", "sdkconfig.defaults"]) {
 }
 await cp(path.join(root, "LICENSES"), path.join(stage, "LICENSES"), { recursive: true });
 const notices = [];
-async function collect(directory, relative = "") {
+async function collect(directory, relative = "", namespace = "managed") {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const rel = path.join(relative, entry.name);
     const source = path.join(directory, entry.name);
-    if (entry.isDirectory()) await collect(source, rel);
-    else if (entry.isFile() && /^(license|copying|notice)([._-]|$)/i.test(entry.name)) {
-      const target = path.join(stage, "LICENSES", "managed", rel);
+    if (entry.isDirectory() && entry.name !== ".git") await collect(source, rel, namespace);
+    else if (entry.isFile() && /^(license|copying|notice|copyright)([._-]|$)/i.test(entry.name)) {
+      const target = path.join(stage, "LICENSES", namespace, rel);
       await mkdir(path.dirname(target), { recursive: true });
       await cp(source, target);
-      notices.push(rel.replaceAll(path.sep, "/"));
+      notices.push(`${namespace}/${rel.replaceAll(path.sep, "/")}`);
     }
   }
 }
 await collect(path.join(project, "managed_components"));
-if (!notices.some((file) => file.startsWith("espressif__esp_peer/")) || !notices.some((file) => file.startsWith("espressif__esp-sr/"))) {
+if (!notices.some((file) => file.startsWith("managed/espressif__esp_peer/")) || !notices.some((file) => file.startsWith("managed/espressif__esp-sr/"))) {
   throw new Error("Required Espressif component licenses are missing.");
 }
+if (process.env.SNOWBALL_IDF_NOTICE_DIR) {
+  await collect(path.resolve(process.env.SNOWBALL_IDF_NOTICE_DIR), "", "idf");
+} else {
+  const sdk = process.env.IDF_PATH || description.idf_path;
+  await collect(path.join(sdk, "components"), "components", "idf");
+  await cp(path.join(sdk, "LICENSE"), path.join(stage, "LICENSES", "idf", "LICENSE"));
+}
+if (!notices.some((file) => file.includes("lwip") && /copying|license/i.test(file))) throw new Error("ESP-IDF third-party notices are incomplete.");
 await writeFile(path.join(stage, "LICENSES", "managed-notices.json"), `${JSON.stringify(notices.sort(), null, 2)}\n`);
 await writeFile(path.join(stage, "SHA256SUMS"), `${hashes.join("\n")}\n`);
 await writeFile(path.join(stage, "INSTALL.txt"), "Developer preview. Extract this archive into firmware/esp32-s3-audio/build-release of the matching source tag. Use the protected Windows/local flash helper. Never flash or erase NVS at 0x9000. Full instructions and license scope are in the matching source repository docs/GETTING_STARTED.md and THIRD_PARTY_NOTICES.md.\n");

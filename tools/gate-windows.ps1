@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory = $true)][ValidatePattern('^[A-Za-z0-9_][A-Za-z0-9_.@-]*$')][string]$GateHost,
-    [ValidateSet('build', 'install', 'status')][string]$Action = 'status',
+    [ValidateSet('download', 'build', 'install', 'status')][string]$Action = 'status',
     [Parameter(Mandatory = $true)][ValidatePattern('^/[A-Za-z0-9_./-]+$')][string]$RemotePath,
     [ValidatePattern('^[0-9.]*$')][string]$LanIp = ''
 )

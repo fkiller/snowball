@@ -24,7 +24,7 @@ for (const platform of platforms) {
   await writeFile(path.join(stage, "release.json"), `${JSON.stringify({
     product: "Snowball-Voice-Gate", version: pkg.version, sourceCommit: commit,
     platform, runtime: platform.startsWith("linux-") ? "Linux Docker Engine" : "SSH launcher to LAN Linux VM/host",
-    protocolVersion: 1, imagePublished: false, instructions: "docs/PLATFORMS.md",
+    protocolVersion: 1, imageDistribution: "matching Linux image archive in coordinated GitHub release", instructions: "docs/PLATFORMS.md",
   }, null, 2)}\n`);
   const archive = path.join(output, `${name}.${platform === "windows" ? "zip" : "tar.gz"}`);
   if (platform === "windows") {
