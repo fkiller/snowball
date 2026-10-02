@@ -3,9 +3,16 @@ const [repository, tag, expectedCommit] = process.argv.slice(2);
 if (!/^[\w.-]+\/[\w.-]+$/.test(repository || "") || !/^v\d+\.\d+\.\d+-alpha\.\d+$/.test(tag || "") || !/^[a-f0-9]{40}$/.test(expectedCommit || "")) throw new Error("Repository, alpha tag and exact commit are required");
 const headers = { "User-Agent": "Snowball-release-verifier", "X-GitHub-Api-Version": "2022-11-28" };
 if (process.env.GH_TOKEN) headers.Authorization = `Bearer ${process.env.GH_TOKEN}`;
-const response = await fetch(`https://api.github.com/repos/${repository}/releases/tags/${tag}`, { headers });
+let response = await fetch(`https://api.github.com/repos/${repository}/releases/tags/${tag}`, { headers });
+// GitHub's tag endpoint does not return drafts. Authenticated list lookup does.
+let draft;
+if (response.status === 404 && process.env.GH_TOKEN) {
+  response = await fetch(`https://api.github.com/repos/${repository}/releases?per_page=100`, { headers });
+  if (response.ok) draft = (await response.json()).find((r) => r.tag_name === tag && r.draft);
+  if (!draft) throw new Error("No authenticated draft for the exact tag");
+}
 if (!response.ok) throw new Error(`Release metadata HTTP ${response.status}`);
-const release = await response.json();
+const release = draft || await response.json();
 const manifestAsset = release.assets.find((a) => a.name === "release-manifest.json");
 if (!manifestAsset) throw new Error("Missing release manifest");
 async function download(asset) {
