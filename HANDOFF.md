@@ -46,6 +46,9 @@ Published 2026-10-02 10:56:22 UTC. Immutable tag/source:
   runs migration/flash guards, Go race/vet/govulncheck, Gitleaks and IDF builds.
 - Approved logo-free banner and icon both render in GitHub visitor README;
   application/PWA branding applied. Original supplied logo images remain ignored.
+- GitHub README now includes ready/active Web Client screenshots and a Web UI
+  tour/access guide (`docs/WEB_UI.md`). Screenshots are reviewed synthetic QA
+  captures, with test addresses/status and no production credentials or calls.
 - Added official Waveshare ESP32-S3-AUDIO-Board product photography and live desk demonstration capture (still and optimized animated GIF from author's live demo video) to `docs/images/hardware/`, integrating them into `README.md`, `docs/GETTING_STARTED.md`, and `firmware/esp32-s3-audio/README.md`.
 
 ## Architecture and release decisions
