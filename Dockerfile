@@ -9,7 +9,7 @@ RUN go mod vendor \
     && cp /usr/local/go/LICENSE /out/third-party/go/GO-LICENSE
 RUN GOMAXPROCS=1 CGO_ENABLED=0 GOOS=linux go build -p=1 -trimpath -ldflags="-s -w" -o /out/snowball-gateway .
 
-FROM node:22-bookworm-slim AS web-builder
+FROM node:26-bookworm-slim AS web-builder
 
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WORKDIR /src
@@ -28,7 +28,7 @@ COPY tools/collect-node-notices.mjs ./tools/
 RUN npm run build
 RUN node tools/collect-node-notices.mjs
 
-FROM node:22-bookworm-slim
+FROM node:26-bookworm-slim
 
 ENV DEBIAN_FRONTEND=noninteractive \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
