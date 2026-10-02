@@ -8,6 +8,13 @@ set -euo pipefail
 umask 077
 
 QA_STATE=/tmp/snowball-qa-state
+QA_HOME=/tmp/snowball-qa-home
+mkdir -p "$QA_HOME"
+# The QA process runs as root with capabilities dropped. It must not try to
+# write Chromium crash/config data into the production user's /data home.
+export HOME="$QA_HOME"
+export XDG_CONFIG_HOME="$QA_HOME/config"
+export XDG_CACHE_HOME="$QA_HOME/cache"
 QA_WEB_PORT=${SNOWBALL_QA_WEB_PORT:-18300}
 QA_GATEWAY_PORT=${SNOWBALL_QA_GATEWAY_PORT:-18080}
 QA_CONTROLLER_PORT=${SNOWBALL_QA_CONTROLLER_PORT:-13100}
@@ -155,7 +162,7 @@ nginx_pid=$!
 cleanup() {
   kill "$nginx_pid" "$web_pid" "$gateway_pid" "$controller_pid" 2>/dev/null || true
   wait "$nginx_pid" "$web_pid" "$gateway_pid" "$controller_pid" 2>/dev/null || true
-  rm -rf "$QA_STATE" /tmp/snowball-qa-*.mjs /tmp/snowball-qa-nginx.conf
+  rm -rf "$QA_STATE" "$QA_HOME" /tmp/snowball-qa-*.mjs /tmp/snowball-qa-nginx.conf
 }
 trap cleanup EXIT INT TERM
 

@@ -18,6 +18,7 @@ port the restricted components to non-Espressif hardware.
 | ESP-IDF | 5.5.5 | Apache-2.0 for the framework; bundled third-party notices also apply |
 | `espressif/esp_peer` | 1.2.7 | Espressif Modified MIT; use exclusively with Espressif products; source/binary redistribution for non-Espressif products prohibited |
 | `espressif/esp-sr` | 2.4.7 | ESPRESSIF MIT; permission for use on Espressif products; retain notices with speech libraries/models |
+| `espressif/dl_fft` | 0.6.0 | MIT; registry package omits a standalone license file, so the upstream license at its recorded source commit is retained in `LICENSES/` |
 | Other managed components | `dependencies.lock` | Individual upstream licenses; retain their exact texts in firmware release archives |
 
 Authoritative terms:
@@ -25,6 +26,7 @@ Authoritative terms:
 - [esp_peer 1.2.7 license](https://components.espressif.com/components/espressif/esp_peer/versions/1.2.7/license)
 - [esp-sr 2.4.7 license](https://components.espressif.com/components/espressif/esp-sr/versions/2.4.7/license)
 - [ESP-IDF 5.5.5 license](https://github.com/espressif/esp-idf/blob/v5.5.5/LICENSE)
+- [dl_fft recorded upstream commit license](https://github.com/espressif/esp-dl/blob/a8a7b60ea5bfd6ce46960ea061641fffa9589440/LICENSE)
 
 Exact vendor texts are retained in `LICENSES/`. Managed components are fetched
 from the registry and are not vendored into this repository. The release

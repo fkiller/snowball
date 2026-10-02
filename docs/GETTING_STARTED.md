@@ -10,7 +10,7 @@ No hardware, paid account, or third-party service is supplied by this repository
 
 | Item | What to obtain | Notes |
 | --- | --- | --- |
-| Gateway host | ARM64 Linux machine with Docker support | Physically validated on an 8 GB ARM64 FriendlyWrt/OpenWrt router. A spare host is preferable to changing your primary router. Other hosts need acceptance testing. |
+| Gateway host | ARM64 or AMD64 Linux machine with Docker support; Windows/macOS can control a LAN Linux VM/host | Physically validated on an 8 GB ARM64 FriendlyWrt/OpenWrt router. A spare host is preferable to changing your primary router. See the [platform guide](PLATFORMS.md) for each installation path. |
 | RAM/storage | 8 GB RAM and at least 20 GB free build/storage space recommended | Planning allowance, not a measured minimum. Chromium uses a 1 GB shared-memory mount; ESP-IDF's container is large. No swap requirement. |
 | Speaker | Waveshare **ESP32-S3-AUDIO-Board**, ESP32-S3R8, 16 MB flash, 8 MB PSRAM | Generic ESP32/S3 boards and other codecs are not drop-in compatible. ESP32-S3-AUDIO-Board-EN is a vendor variant; it is not independently accepted here. |
 | Audio/power | Vendor-compatible speaker and USB-C power arrangement | Check the seller's package contents and the board manual. Confirm the speaker is connected; do not buy an arbitrary impedance/power replacement. Battery and microSD are unnecessary for Snowball. |
@@ -209,6 +209,27 @@ cd esp-idf
 
 Install the OS prerequisites listed by Espressif before `install.sh`, then
 return to the Snowball repository. Re-export this environment in each new shell.
+
+### Using a published firmware archive instead of compiling
+
+Once a firmware prerelease actually exists, download its ESP32-S3 `.tar.gz`
+and `.sha256` from Releases. Verify the checksum using the commands in the
+[platform guide](PLATFORMS.md#common-release-installation). Check out the
+matching source tag so the protected flash helpers and instructions match.
+Keep the native IDF Python/esptool environment for USB programming.
+
+From the matching repository root, create `firmware/esp32-s3-audio/build-release`
+(`New-Item -ItemType Directory -Force` in PowerShell; `mkdir -p` on Linux/macOS),
+then extract the archive's contents, removing its enclosing directory:
+
+```sh
+tar -xzf PATH_TO_DOWNLOADED_FIRMWARE.tar.gz --strip-components=1 -C firmware/esp32-s3-audio/build-release
+```
+
+Windows includes `tar`; replace the download path for your computer. Confirm
+the four binaries and `flash_args` exist directly under `build-release` before
+continuing. Downloading an archive does not authorize erasing NVS or flashing
+a factory backup. A source preview may have no published firmware asset yet.
 
 ## 6. Flash without erasing identity
 

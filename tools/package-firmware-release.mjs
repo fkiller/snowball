@@ -51,7 +51,7 @@ await writeFile(path.join(stage, "flash-layout.json"), `${JSON.stringify({
   protocolVersion: 1, sourceCommit: commit, espIdf: "5.5.5", target: "esp32s3",
   nvsExcluded: true, images,
 }, null, 2)}\n`);
-for (const file of ["LICENSE", "THIRD_PARTY_NOTICES.md", "docs/GETTING_STARTED.md"]) {
+for (const file of ["LICENSE", "THIRD_PARTY_NOTICES.md"]) {
   await cp(path.join(root, file), path.join(stage, path.basename(file)));
 }
 for (const file of ["dependencies.lock", "sdkconfig.defaults"]) {
@@ -79,6 +79,7 @@ if (!notices.some((file) => file.startsWith("espressif__esp_peer/")) || !notices
 await writeFile(path.join(stage, "LICENSES", "managed-notices.json"), `${JSON.stringify(notices.sort(), null, 2)}\n`);
 await writeFile(path.join(stage, "SHA256SUMS"), `${hashes.join("\n")}\n`);
 await writeFile(path.join(stage, "INSTALL.txt"), "Developer preview. Extract this archive into firmware/esp32-s3-audio/build-release of the matching source tag. Use the protected Windows/local flash helper. Never flash or erase NVS at 0x9000. Full instructions and license scope are in the matching source repository docs/GETTING_STARTED.md and THIRD_PARTY_NOTICES.md.\n");
+await writeFile(path.join(stage, "INSTALL.md"), `# Snowball-Voice firmware setup\n\nFollow the [complete purchase, tools, archive installation, protected flashing, pairing, and execution guide](https://github.com/fkiller/snowball/blob/${commit}/docs/GETTING_STARTED.md). Use the matching source commit \`${commit}\` and its protected flash helpers. This archive contains no NVS image. Never erase or write NVS at 0x9000.\n`);
 const archive = path.join(output, `${name}.tar.gz`);
 execFileSync("tar", ["-czf", archive, "-C", output, name]);
 const archiveHash = createHash("sha256").update(await readFile(archive)).digest("hex");
