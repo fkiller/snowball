@@ -162,6 +162,11 @@ nginx_pid=$!
 cleanup() {
   kill "$nginx_pid" "$web_pid" "$gateway_pid" "$controller_pid" 2>/dev/null || true
   wait "$nginx_pid" "$web_pid" "$gateway_pid" "$controller_pid" 2>/dev/null || true
+  # Screenshots inherit the bind directory's host group. Preserve private
+  # directory access while allowing that host group to upload synthetic QA.
+  for screenshot in /artifacts/*.png; do
+    [ ! -f "$screenshot" ] || chmod g+r "$screenshot"
+  done
   rm -rf "$QA_STATE" "$QA_HOME" /tmp/snowball-qa-*.mjs /tmp/snowball-qa-nginx.conf
 }
 trap cleanup EXIT INT TERM

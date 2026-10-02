@@ -45,6 +45,31 @@ preview does not promise production-trusted devices or unrestricted MIT binaries
    its reviewed archive, SBOMs, and checksums, then publish only when all binary
    gates are recorded. No automatic public image publication is configured.
 
+## Repository publication settings
+
+The current repository remains private during preparation. After selecting
+the source-preview publication milestone, enable private vulnerability
+reporting under **Settings → Code security**, secret scanning/push protection
+when available, and protect `main` with a pull-request rule requiring these
+checks:
+
+- Full-history secret scan
+- Web build, lint, and audit
+- Gateway test, vet, and vulnerability scan
+- ESP32-S3 firmware build
+- ARM64 container build, scan, and isolated smoke
+- AMD64 container build, scan, and isolated smoke
+
+Disable force pushes/deletion for `main`; require an up-to-date branch and
+keep the action permissions read-only. Set reviewer requirements according
+to the actual maintainer team. Dependabot vulnerability alerts were enabled
+during preparation. GitHub rejected branch-protection access for the current
+private repository with `Upgrade to GitHub Pro or make this repository public`;
+apply protection when that feature becomes available, rather than claiming
+the rule is already active. Verify the private reporting button before opening
+the repository to users. Source publication, binary publication, and deployment
+are three separate operations.
+
 ## Firmware archive
 
 Use `node tools/package-firmware-release.mjs` after a clean IDF build.

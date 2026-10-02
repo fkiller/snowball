@@ -8,7 +8,7 @@ mkdir -p "$ARTIFACT_DIR"
 # Retain only synthetic QA screenshots in a new private directory. Give the
 # capability-free container its host owner's group for writing the bind mount.
 RUN_ARTIFACT_DIR=$(mktemp -d "$ARTIFACT_DIR/run.XXXXXX")
-chmod g+rwx "$RUN_ARTIFACT_DIR"
+chmod 2770 "$RUN_ARTIFACT_DIR"
 
 # The Gateway requires an assigned private IPv4. CI runners do not have the
 # production router address; detect a private host interface for test ports.
