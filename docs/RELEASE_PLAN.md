@@ -7,6 +7,13 @@ Snowball-Voice from the same commit. The tag-triggered CI pipeline publishes all
 see the actual Releases page and workflow run for publication status. Protocol version remains **1**;
 existing `snowball-voice` container, volume, NVS, and state identifiers remain.
 
+The coordinated [public alpha](https://github.com/fkiller/snowball/releases/tag/v0.4.0-alpha.1)
+was published by [successful CI](https://github.com/fkiller/snowball/actions/runs/36998111226).
+Both products, all four Gateway platform bundles, two prebuilt Linux images,
+firmware, corresponding source, licenses and SBOMs are available. Complete
+authenticated and anonymous download verification passed; manual hardware/VM
+acceptance remains separately tracked in RELEASE_READINESS.md.
+
 Use one repository and one coordinated tag initially. The application/PWA
 identifies Snowball-Voice-Gate; the ESP32 identifies Snowball-Voice. Preserve
 the internal `snowball_speaker.bin` filename so protected flash tools remain compatible.
@@ -54,6 +61,14 @@ preview does not promise production-trusted devices or unrestricted MIT binaries
     Only drafts can have assets replaced; published versions are immutable.
     Make a new version/tag for corrections to published binaries. CI does not
     deploy to a router, flash hardware, change NVS or burn eFuses.
+
+If build/security/package jobs passed but publication failed, use
+`finish-release.yml` with the same tag and original `source_run`. It requires
+the exact tag SHA and all ten successful original jobs, then repeats complete
+download verification using those artifacts. Draft lookup happens in the
+write-scoped publisher; read-only validation checks provenance only. This
+path completed the first alpha without moving the tag or rebuilding binaries.
+Published releases cannot be used with this recovery workflow.
 
 ## Repository publication settings
 

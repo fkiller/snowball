@@ -1,6 +1,7 @@
 # Snowball-Voice + Snowball-Voice-Gate 0.4.0-alpha.1
 
 Coordinated experimental developer preview; device protocol **1**.
+Published 2026-10-02. Source commit: `9b260cc16d3999890ad12a1450dc5ca61a23fcf6`.
 
 ## Download and install
 
@@ -20,7 +21,8 @@ Coordinated experimental developer preview; device protocol **1**.
 
 [Buy hardware, install tools, compile, flash, pair, and run](https://github.com/fkiller/snowball/blob/v0.4.0-alpha.1/docs/GETTING_STARTED.md).
 [Install and run each Gateway platform](https://github.com/fkiller/snowball/blob/v0.4.0-alpha.1/docs/PLATFORMS.md).
-[CI results](https://github.com/fkiller/snowball/actions/workflows/release.yml).
+[Build/security/package jobs](https://github.com/fkiller/snowball/actions/runs/36967114243).
+[Successful CI publication and all-download verification](https://github.com/fkiller/snowball/actions/runs/36998111226).
 
 Project-authored code is MIT. Espressif firmware components retain ESP-only
 terms; Debian, Chromium, GStreamer, noVNC and other components retain their
