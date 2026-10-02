@@ -16,7 +16,7 @@ the internal `snowball_speaker.bin` filename so protected flash tools remain com
 | Milestone | Required evidence | Distribution |
 | --- | --- | --- |
 | Source preview | Canonical source reconciled, MIT scope/vendor terms clear, history + tracked-file secret scans clean, complete setup docs, CI run recorded | Public source repository; limitations visible |
-| Binary alpha | All source gates + Linux race/vet/vulnerability checks, web checks, clean IDF build, ARM64 image build + scan + isolated smoke, license/source-offer review | GitHub prerelease with checksummed firmware and optionally reviewed ARM64 image |
+| Binary alpha | All source gates + Linux race/vet/vulnerability checks, web checks, clean IDF build, ARM64/AMD64 image build + scan + isolated smoke, license/source-offer review | GitHub prerelease with checksummed firmware, platform bundles, and optionally reviewed multi-architecture image |
 | Hardware acceptance | Three ordinary wake/converse/end cycles, no ghost wake, pairing/replay/revocation cases, acoustic barge-in assessment, physical long-session evidence | Updated prerelease evidence; no invented CI coverage |
 | Production release | Secure Boot, flash/NVS encryption, signed OTA + anti-rollback, rotation/revocation/recovery workflows, supported-browser and upgrade/rollback acceptance | Stable release only after the threat model and support commitments are updated |
 

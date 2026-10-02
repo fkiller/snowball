@@ -130,7 +130,7 @@ mkdir -p /tmp/snowball-qa-nginx-body /tmp/snowball-qa-nginx-proxy \
 
 export STATE_DIR="$QA_STATE/state"
 export SNOWBALL_CA_CERT="$QA_STATE/certs/ca.crt"
-export SNOWBALL_LAN_IP=192.168.1.1
+export SNOWBALL_LAN_IP=${SNOWBALL_QA_LAN_IP:?QA host private IPv4 is required}
 export SNOWBALL_HTTPS_PORT="$QA_HTTPS_PORT"
 export SNOWBALL_HTTP_PORT=18088
 export SNOWBALL_ICE_PORT="$QA_ICE_PORT"

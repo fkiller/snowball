@@ -9,8 +9,8 @@ release contract/plan until listed on the repository's actual Releases page.
 | Linux ARM64 | `snowball-voice-gate-VERSION-linux-arm64.tar.gz` | Docker Engine directly on LAN host | Physical router evidence exists for 0.3.10; new-tag CI/image checks required |
 | Linux AMD64 | `snowball-voice-gate-VERSION-linux-amd64.tar.gz` | Docker Engine directly on LAN host | Build/smoke gate per architecture; physical acceptance separately recorded |
 | OpenWrt ARM64 | Linux ARM64 package | Existing host Docker; optional procd integration | Preserve current daemon/state; boot/migration is a manual gate |
-| Windows x64/ARM64 | `snowball-voice-gate-VERSION-windows.zip` | PowerShell/SSH launcher → Linux VM or separate LAN Linux host | Launcher validation is automated; VM/media acceptance still manual |
-| macOS Intel/Apple Silicon | `snowball-voice-gate-VERSION-macos.tar.gz` | shell/SSH launcher → Linux VM or separate LAN Linux host | Launcher validation is automated; VM/media acceptance still manual |
+| Windows x64/ARM64 | `snowball-voice-gate-VERSION-windows.zip` | PowerShell/SSH launcher → Linux VM or separate LAN Linux host | Input validation implemented; VM/media acceptance still manual |
+| macOS Intel/Apple Silicon | `snowball-voice-gate-VERSION-macos.tar.gz` | shell/SSH launcher → Linux VM or separate LAN Linux host | Input validation implemented; VM/media acceptance still manual |
 
 Windows/macOS packages contain source, launchers, configuration, and guides.
 Chromium/audio run in the Linux container. Linux images are built for ARM64
