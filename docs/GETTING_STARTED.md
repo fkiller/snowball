@@ -19,6 +19,15 @@ No hardware, paid account, or third-party service is supplied by this repository
 | Network | Private IPv4 LAN and **2.4 GHz Wi-Fi** | ESP32 joins 2.4 GHz; Gateway may be wired. Disable client isolation or allow the documented LAN ports between the devices. Never forward them from WAN. |
 | Service access | Your own ChatGPT account with Voice available | Availability and limits depend on the service/account. An OpenAI API key is not used by this integration. |
 
+<p align="center">
+  <img src="images/hardware/waveshare-esp32-s3-audio.jpg" width="300" alt="Waveshare ESP32-S3-AUDIO-Board front view">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="images/hardware/waveshare-esp32-s3-audio-details.jpg" width="300" alt="Waveshare ESP32-S3-AUDIO-Board rear view with microphones">
+</p>
+<p align="center">
+  <em>Supported hardware: Waveshare ESP32-S3-AUDIO-Board with speaker base (top acrylic cover, dual microphones, and USB-C port).</em>
+</p>
+
 Use the [manufacturer's board page](https://www.waveshare.com/esp32-s3-audio-board.htm)
 to buy from Waveshare or a local authorized seller. Confirm the exact model,
 memory, included speaker/cable, and current price with the seller.
