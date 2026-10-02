@@ -1,0 +1,28 @@
+name: Bug report
+description: Report a reproducible Snowball problem without secrets
+body:
+  - type: markdown
+    attributes:
+      value: "Security issues: use private reporting in SECURITY.md. Never attach credentials, /data, browser profiles, or raw audio."
+  - type: input
+    id: version
+    attributes:
+      label: Gateway and firmware versions / commit
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Host, board, browser, and installation method
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction, expected result, and actual result
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Redacted diagnostic evidence

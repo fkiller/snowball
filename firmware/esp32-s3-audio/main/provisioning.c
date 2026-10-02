@@ -13,6 +13,7 @@
 #include "command_recognizer.h"
 #include "diagnostics.h"
 #include "esp_check.h"
+#include "esp_app_desc.h"
 #include "esp_event.h"
 #include "esp_http_client.h"
 #include "esp_log.h"
@@ -29,11 +30,7 @@
 #include "serial_output.h"
 
 #define PROTOCOL_VERSION 1
-#if CONFIG_SNOWBALL_COMMAND_TAIL
-#define FIRMWARE_VERSION "0.3.1-command-fsm"
-#else
-#define FIRMWARE_VERSION "0.3.1-bare-voice"
-#endif
+#define FIRMWARE_VERSION (esp_app_get_description()->version)
 #define DEVICE_MODEL "Waveshare ESP32-S3-AUDIO-Board"
 #define PROVISION_NAMESPACE "snowball"
 #define SERIAL_LINE_MAX 2048

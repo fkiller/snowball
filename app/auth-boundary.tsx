@@ -104,9 +104,9 @@ export function AuthBoundary({ children }: { children: React.ReactNode }) {
   return (
     <main className="auth-shell">
       <section className="auth-panel" aria-labelledby="auth-title">
-        <Link className="wordmark auth-wordmark" href="/" aria-label="Snowball home">
+        <Link className="wordmark auth-wordmark" href="/" aria-label="Snowball-Voice-Gate home">
           <span className="snow-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>SNOWBALL</span>
+          <span>Snowball-Voice-Gate</span>
         </Link>
         {!status ? (
           <p className="auth-loading" role="status">Checking the local gateway…</p>

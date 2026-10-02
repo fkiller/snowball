@@ -353,9 +353,9 @@ export function VoiceConsole() {
       <div className="ambient ambient-two" />
 
       <header className="topbar">
-        <Link className="wordmark" href="/" aria-label="Snowball home">
+        <Link className="wordmark" href="/" aria-label="Snowball-Voice-Gate home">
           <span className="snow-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>SNOWBALL</span>
+          <span>Snowball-Voice-Gate</span>
         </Link>
         <div className={`gateway-pill ${gatewayReady ? "online" : "offline"}`}>
           <span /> {gatewayReady ? "LOCAL GATEWAY ONLINE" : "GATEWAY STARTING"}

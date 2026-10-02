@@ -1,4 +1,10 @@
-# Snowball ESP32-S3 audio firmware
+# Snowball-Voice ESP32-S3 audio firmware
+
+For purchase, tool installation, Windows/Linux builds, protected flashing,
+Gateway setup, pairing, and first use, follow the complete
+[getting-started guide](../../docs/GETTING_STARTED.md). Project-authored source
+is MIT; [Espressif component/model terms](../../THIRD_PARTY_NOTICES.md) remain
+applicable to combined firmware. Prepared version: `0.4.0-alpha.1`.
 
 Target: Waveshare ESP32-S3-AUDIO-Board, 16 MB flash, 8 MB octal PSRAM.
 
@@ -33,8 +39,9 @@ from that catalog. A fresh board therefore has only the built-in control word
 `Resume` until the first sync has completed.
 
 The Gateway control-event verifier and authenticated candidate-sync transport
-are implemented, but this development image still requires physical media and
-sync acceptance, revocation enforcement on the device, and signed OTA. It must
+are implemented. The prior final development image passed a 10m30s physical
+transport run; ordinary acoustic cycles, broader sync/revocation acceptance,
+and signed OTA remain open. It must
 not be treated as production-trusted until those paths, Secure Boot, flash
 encryption, and anti-rollback are implemented and tested.
 

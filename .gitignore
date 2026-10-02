@@ -59,6 +59,11 @@ yarn-error.log*
 /outputs/
 /work/
 
+# User-supplied branding originals contain third-party marks; publish only
+# reviewed replacements under public/branding, preserving originals locally.
+/banner.png
+/icon.png
+
 # ESP-IDF generated state
 /build-*/
 /firmware/**/build/

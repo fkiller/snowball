@@ -1,5 +1,9 @@
 # Snowball — Project Context
 
+> Historical development context. Current public setup and verification are in
+> README.md, docs/GETTING_STARTED.md, docs/RELEASE_READINESS.md, and HANDOFF.md.
+> Do not infer live state from the dated observations below.
+
 This document summarizes the prior Snowball work so a new Codex project can continue without relying on the previous conversation.
 
 ## Product

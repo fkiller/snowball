@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { AdminApp } from "./admin-app";
 
 export const metadata: Metadata = {
-  title: "Admin · Snowball",
+  title: "Admin · Snowball-Voice-Gate",
   description: "Snowball gateway settings and security controls.",
 };
 

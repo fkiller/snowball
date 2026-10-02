@@ -181,9 +181,9 @@ export function AdminConsole() {
   return (
     <main className="admin-shell">
       <header className="admin-topbar">
-        <Link className="wordmark" href="/" aria-label="Snowball home">
+        <Link className="wordmark" href="/" aria-label="Snowball-Voice-Gate home">
           <span className="snow-mark" aria-hidden="true"><i /><i /><i /></span>
-          <span>SNOWBALL</span>
+          <span>Snowball-Voice-Gate</span>
         </Link>
         <nav aria-label="Admin navigation">
           <Link href="/">Voice console</Link>

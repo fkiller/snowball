@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { SnowballApp } from "./snowball-app";
 
 export const metadata: Metadata = {
-  title: "Snowball",
+  title: "Snowball-Voice-Gate",
   description: "A private, room-scale bridge to ChatGPT Voice.",
 };
 

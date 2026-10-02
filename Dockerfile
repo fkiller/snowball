@@ -1,6 +1,6 @@
 FROM golang:1.26.5-bookworm AS gateway-builder
 WORKDIR /src
-COPY gateway/go.mod ./
+COPY gateway/go.mod gateway/go.sum ./
 RUN go mod download
 COPY gateway/ ./
 RUN GOMAXPROCS=1 CGO_ENABLED=0 GOOS=linux go build -p=1 -trimpath -ldflags="-s -w" -o /out/snowball-gateway .
@@ -74,6 +74,8 @@ RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSIO
 COPY container/chromium-policy.json /etc/chromium/policies/managed/snowball-voice.json
 
 WORKDIR /opt/snowball
+COPY LICENSE THIRD_PARTY_NOTICES.md ./
+COPY LICENSES ./LICENSES
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts \
     && npm cache clean --force \

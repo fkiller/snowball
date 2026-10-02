@@ -2,7 +2,8 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$Port,
-    [string]$BuildDir = ''
+    [string]$BuildDir = '',
+    [string]$Python = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -22,7 +23,7 @@ if (-not $BuildDir) {
 # 0x9000 and are never an allowed target.
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\firmware\esp32-s3-audio')).Path
 $resolvedBuild = (Resolve-Path $BuildDir).Path
-if (-not $resolvedBuild.StartsWith($projectRoot, [StringComparison]::OrdinalIgnoreCase)) {
+if (-not $resolvedBuild.StartsWith($projectRoot.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) {
     throw "Firmware build directory must remain inside $projectRoot"
 }
 
@@ -48,17 +49,33 @@ foreach ($relative in @('bootloader\bootloader.bin', 'partition_table\partition-
         throw "The approved firmware image is missing: $image"
     }
 }
-
-$esptool = 'C:\Espressif\tools\python\v5.5.5\venv\Scripts\python.exe'
-if (-not (Test-Path -LiteralPath $esptool -PathType Leaf)) {
-    throw 'ESP-IDF 5.5.5 Python environment is unavailable.'
+$rangeLimits = @{
+    'bootloader\bootloader.bin' = 0x8000
+    'partition_table\partition-table.bin' = 0x1000
+    'snowball_speaker.bin' = 0x300000
+    'srmodels\srmodels.bin' = 0x600000
 }
+foreach ($range in $rangeLimits.GetEnumerator()) {
+    if ((Get-Item -LiteralPath (Join-Path $resolvedBuild $range.Key)).Length -gt $range.Value) {
+        throw "Firmware image exceeds its safe non-NVS range: $($range.Key)"
+    }
+}
+
+if (-not $Python) {
+    if ($env:IDF_PYTHON_ENV_PATH) {
+        $Python = Join-Path $env:IDF_PYTHON_ENV_PATH 'Scripts\python.exe'
+    } else {
+        $Python = (Get-Command python -ErrorAction Stop).Source
+    }
+}
+& $Python -m esptool version
+if ($LASTEXITCODE -ne 0) { throw 'Activate the ESP-IDF 5.5.5 PowerShell environment or provide -Python.' }
 
 $bootloader = Join-Path $resolvedBuild 'bootloader\bootloader.bin'
 $partition = Join-Path $resolvedBuild 'partition_table\partition-table.bin'
 $application = Join-Path $resolvedBuild 'snowball_speaker.bin'
 $models = Join-Path $resolvedBuild 'srmodels\srmodels.bin'
-& $esptool -m esptool --chip esp32s3 --port $Port -b 460800 --before default_reset --after hard_reset write_flash `
+& $Python -m esptool --chip esp32s3 --port $Port -b 460800 --before default_reset --after hard_reset write_flash `
     --flash_mode dio --flash_freq 80m --flash_size 16MB `
     0x0 $bootloader 0x8000 $partition 0x10000 $application 0x310000 $models
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

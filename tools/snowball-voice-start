@@ -1,0 +1,60 @@
+#!/bin/sh
+set -u
+
+# Start the already-created production container through the host's normal
+# Docker daemon. This helper deliberately never starts dockerd and never
+# creates a replacement container or volume.
+DOCKER=${SNOWBALL_DOCKER_BIN:-$(command -v docker 2>/dev/null || printf '%s' /usr/bin/docker)}
+CONTAINER=${SNOWBALL_CONTAINER:-snowball-voice}
+WAIT_SECONDS=${SNOWBALL_DOCKER_WAIT_SECONDS:-120}
+# Ignore a stale shell/context setting left by the removed project daemon.
+DOCKER_HOST=${SNOWBALL_DOCKER_HOST:-unix:///var/run/docker.sock}
+export DOCKER_HOST
+unset DOCKER_CONTEXT
+
+log() {
+    logger -t snowball-voice "$*" 2>/dev/null || printf '%s\n' "snowball-voice: $*" >&2
+}
+
+if [ ! -x "$DOCKER" ]; then
+    log "Docker CLI not found: $DOCKER"
+    exit 1
+fi
+
+elapsed=0
+while ! "$DOCKER" info >/dev/null 2>&1; do
+    if [ "$elapsed" -ge "$WAIT_SECONDS" ]; then
+        log "host Docker daemon did not become ready within ${WAIT_SECONDS}s"
+        exit 1
+    fi
+    sleep 2
+    elapsed=$((elapsed + 2))
+done
+
+if ! "$DOCKER" inspect "$CONTAINER" >/dev/null 2>&1; then
+    log "container $CONTAINER is missing; refusing to create an untracked container"
+    exit 1
+fi
+
+if ! "$DOCKER" start "$CONTAINER" >/dev/null 2>&1; then
+    state=$("$DOCKER" inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null || printf '%s' missing)
+    if [ "$state" != running ] && [ "$state" != restarting ]; then
+        log "could not start $CONTAINER (state=$state)"
+        exit 1
+    fi
+fi
+
+# Keep a procd-owned process alive while the container is running. If the
+# container exits, procd respawns this helper and attempts a clean restart.
+while :; do
+    state=$("$DOCKER" inspect -f '{{.State.Status}}' "$CONTAINER" 2>/dev/null || printf '%s' missing)
+    case "$state" in
+        running|restarting)
+            sleep 15
+            ;;
+        *)
+            log "$CONTAINER stopped (state=$state); requesting procd restart"
+            exit 1
+            ;;
+    esac
+done

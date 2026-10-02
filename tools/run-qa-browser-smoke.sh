@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-IMAGE=${SNOWBALL_QA_IMAGE:-snowball-voice:candidate-sync-20260821}
+IMAGE=${SNOWBALL_QA_IMAGE:-snowball-voice:test}
 ARTIFACT_DIR=${SNOWBALL_TEST_OUTPUT:-$ROOT_DIR/artifacts/qa}
 mkdir -p "$ARTIFACT_DIR"
 

@@ -1,0 +1,48 @@
+name: Prepare release artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing coordinated prerelease tag
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  packages:
+    name: Firmware and platform review bundles
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22.23.0
+      - name: Validate coordinated tag
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          test "$RELEASE_TAG" = "v$(node -p "require('./package.json').version")"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "$RELEASE_TAG^{commit}")"
+      - name: Build locked ESP32-S3 firmware
+        run: docker run --rm -v "$PWD/firmware/esp32-s3-audio:/project" -w /project espressif/idf:v5.5.5 bash -lc 'source /opt/esp/idf/export.sh && idf.py -D SDKCONFIG=/project/build-release/sdkconfig -D SDKCONFIG_DEFAULTS=/project/sdkconfig.defaults -B build-release build'
+      - name: Package approved firmware and all Gateway platforms
+        run: |
+          node tools/package-firmware-release.mjs
+          node tools/package-gate-release.mjs
+      - name: Generate npm runtime SBOM
+        run: |
+          npm ci --ignore-scripts
+          npm sbom --sbom-format cyclonedx --omit=dev > artifacts/releases/npm-runtime-sbom.cdx.json
+      - name: Upload review artifacts (no release/image publication)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-review
+          path: |
+            artifacts/releases/*.tar.gz
+            artifacts/releases/*.zip
+            artifacts/releases/*.sha256
+            artifacts/releases/*.cdx.json
+          retention-days: 14

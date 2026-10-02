@@ -14,6 +14,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  secrets:
+    name: Full-history secret scan
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out all history
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.26.5
+      - name: Install and run pinned Gitleaks
+        run: |
+          go install github.com/zricethezav/gitleaks/v8@v8.30.1
+          gitleaks git . --redact --log-opts=--all
+
   web:
     name: Web build, lint, and audit
     runs-on: ubuntu-24.04
@@ -29,10 +46,16 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Block vulnerable runtime dependencies
         run: npm audit --omit=dev --audit-level=high
+      - name: Block vulnerable development dependencies
+        run: npm audit --audit-level=high
       - name: Lint
         run: npm run lint
       - name: Build and test
         run: npm test
+      - name: Check documentation links
+        run: node tools/check-doc-links.mjs
+      - name: Verify migration rollback with mocked daemons
+        run: sudo env PATH="$PATH" node --test tests/migration.test.mjs
 
   gateway:
     name: Gateway test, vet, and vulnerability scan
@@ -71,13 +94,21 @@ jobs:
           idf.py build
 
   image:
-    name: Container build and scan
-    runs-on: ubuntu-24.04
+    name: ${{ matrix.arch }} container build, scan, and isolated smoke
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: ARM64
+            runner: ubuntu-24.04-arm
+          - arch: AMD64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     steps:
       - name: Check out source
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Build container
-        run: docker build --tag snowball-voice:ci .
+        run: docker build --network host --tag snowball-voice:ci .
       - name: Scan image for high and critical findings
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
@@ -88,3 +119,12 @@ jobs:
           ignore-unfixed: true
           severity: HIGH,CRITICAL
           scanners: vuln,secret,misconfig
+      - name: Isolated authentication and media lifecycle smoke
+        run: SNOWBALL_QA_IMAGE=snowball-voice:ci ./tools/run-qa-browser-smoke.sh
+      - name: Generate image SBOM
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.70.0 image --format cyclonedx --output /dev/stdout snowball-voice:ci > image-sbom.cdx.json
+      - name: Retain image SBOM
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: image-sbom-${{ matrix.arch }}
+          path: image-sbom.cdx.json

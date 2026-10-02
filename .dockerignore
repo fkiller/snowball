@@ -23,6 +23,8 @@ eim_config.toml
 .snowball-emulator
 .snowball-device-emulator
 README.md
+banner.png
+icon.png
 build-*
 firmware/**/build
 firmware/**/build*/

@@ -1,5 +1,9 @@
 # Snowball implementation roadmap
 
+> Historical development context. Current public setup and verification are in
+> README.md, docs/GETTING_STARTED.md, docs/RELEASE_READINESS.md, and HANDOFF.md.
+> Do not infer live state from the dated observations below.
+
 This is the working checklist for the current hardware milestone. A checked
 item means that the repository has an implementation and an automated or
 repeatable verification path; it does not mean that production trust has been

@@ -10,6 +10,7 @@ idf_component_register(
         "serial_output.c"
         "speech.c"
     INCLUDE_DIRS "."
+    PRIV_REQUIRES esp_app_format
     REQUIRES
         esp_event
         esp_http_client

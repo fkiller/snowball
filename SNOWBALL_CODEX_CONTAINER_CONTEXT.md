@@ -1,5 +1,9 @@
 # Snowball Router — Codex 컨테이너 환경 컨텍스트
 
+> Historical development context. Current public setup and verification are in
+> README.md, docs/GETTING_STARTED.md, docs/RELEASE_READINESS.md, and HANDOFF.md.
+> Do not infer live state from the dated observations below.
+
 이 문서는 Snowball Router의 새 Codex 세션 시작 시 그대로 붙여 넣는 운영 컨텍스트다. 아래 사실과 규칙을 먼저 숙지하고, 작업 전에 현재 상태를 다시 확인하라. Snowball-minis로 개발을 옮길 때는 이 문서를 현재 환경으로 오해하지 말고 `docs/SNOWBALL_MINIS_HANDOFF.md`를 먼저 읽어라.
 
 ## 1. 장비와 운영 경계

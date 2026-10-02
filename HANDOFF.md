@@ -1,3 +1,92 @@
+# Public release preparation handoff
+
+**Handoff state: READY** — 2026-10-01 America/New_York.
+
+## Current objective and task
+
+Prepare the public Snowball-Voice ESP32 client and Snowball-Voice-Gate Gateway
+repository. User authorized repository updates, MIT for project-authored code
+with Espressif constraints preserved, complete purchase/tool/build/run guides,
+platform-specific Gateway bundles, and a release plan. User approved replacing
+the OpenAI logo in the supplied artwork with an original audio waveform.
+Production deployment, daemon migration, physical flashing, and eFuse changes
+were not requested and must not occur during source preparation.
+
+## Current state and completed work
+
+- Prepared coordinated version 0.4.0-alpha.1; protocol remains 1. Container,
+  volume, state, binary filenames, and production runtime stay compatible.
+- MIT scope and Espressif restricted license texts documented; compiled
+  firmware/container distribution retains vendor/copyleft obligations.
+- README, complete getting-started guide, platform matrix, privacy/security,
+  contribution/reporting templates, release plan, readiness record added.
+- Public logo-free banner/icon and PWA branding added; original root images
+  remain locally ignored.
+- Windows/macOS launchers control a LAN Linux VM/host; Linux ARM64/AMD64 image
+  jobs and platform packaging are provided. Native desktop Docker cannot bind
+  the desktop's LAN interface as required; do not claim its acceptance.
+- npm scripts work in PowerShell; vulnerable tooling/transitives updated
+  without changing frameworks. Current full npm audit reports zero findings.
+- Protected local flash helpers preserve NVS and reject range overflows.
+- Router boot helpers preserved and optional migration rewritten to stop the
+  old instance before state copy, preserve environment/image, and roll back.
+  Three Linux mocked lifecycle/rollback tests pass; no live migration performed.
+- Fresh Windows ESP-IDF 5.5.5 build passes, app 0x221e30 bytes (29% free).
+  Windows vendor model-report encoding requires PYTHONUTF8/PYTHONIOENCODING;
+  setup documentation includes those settings.
+- Latest Windows web install/audit/lint/build pass; 15 web tests pass and 3
+  POSIX migration tests skip. Linux migration tests pass separately.
+- Linux ARM64 Gateway race tests pass; vet/vulnerability/image checks continue.
+
+## Exact next action and remaining work
+
+Read docs/RELEASE_READINESS.md, inspect Git/CI, and finish any pending checks.
+Prepare/push the release-prep branch, review CI, update main safely, and apply
+public-repository/security settings only after source gates pass. Tag/binary
+publication stays separate until the binary/license/manual gates are satisfied.
+Package and verify firmware plus Linux ARM64/AMD64, Windows, and macOS bundles.
+Do not advertise a registry image or successful physical cases that do not exist.
+
+## Architecture and reconciliation
+
+The local source started at 39cfc44, including all transport/watchdog fixes.
+Router HEAD b702a4c has independent uncommitted Docker changes. Its exact patch
+and original new scripts are preserved locally in ignored
+artifacts/router-prep-snapshot/. The router worktree is untouched. Keep its
+changes: never overwrite it with a sync or reset. Build under the separate
+/tmp/snowball-public-prep checkout and snowball-voice:public-prep-test tag.
+The live router still uses unix:///var/run/snowball-voice-docker.sock and runs
+snowball-voice:0.3.10-full-duplex, healthy at inspection.
+
+## Verification, commands, and known limits
+
+Use CONTRIBUTING.md for required checks, docs/GETTING_STARTED.md for firmware,
+docs/PLATFORMS.md for platform installation, and docs/RELEASE_PLAN.md for release
+packaging. Final results belong in docs/RELEASE_READINESS.md. Gitleaks 8.30.1
+baseline full-history scan of 35 commits found no secrets; repeat for final HEAD.
+Native Windows full Gateway tests still have POSIX-permission and /tmp failures;
+Linux race results are authoritative.
+
+Physical three-cycle/acoustic/barge-in acceptance, Windows/macOS VM onboarding,
+real migration/reboot, binary license/source-offer review remain open. AEC is
+disabled; development NVS is plaintext; production Secure Boot/flash encryption/
+signed OTA/anti-rollback are incomplete. Normal flashing never writes NVS 0x9000.
+
+## Git state and important files
+
+Work branch: codex/public-release-prep. All source-preparation files are listed
+in git status; runtime/build artifacts and original artwork are ignored. No
+stash was created. Root README links all user guides; tools/package-*-release.mjs
+and .github/workflows/prepare-release.yml prepare review artifacts without
+publishing or deploying. Optional operations are documented in docs/OPENWRT.md.
+
+---
+
+# Archived transport handoff (2026-09-05)
+
+The original physical transport evidence below is retained as historical
+context. Current objective, source, and release checks above take precedence.
+
 # Agent Handoff
 
 ## Status

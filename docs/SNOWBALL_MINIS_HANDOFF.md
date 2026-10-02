@@ -1,5 +1,9 @@
 # Snowball-minis IoT handoff
 
+> Historical development context. Current public setup and verification are in
+> README.md, docs/GETTING_STARTED.md, docs/RELEASE_READINESS.md, and HANDOFF.md.
+> Do not infer live state from the dated observations below.
+
 Last updated: 2026-08-22
 
 This document moves ESP32 build, flash, log analysis, and candidate deployment

@@ -1,188 +1,98 @@
-# Snowball
+# Snowball-Voice · Snowball-Voice-Gate
 
-Snowball turns an ARM64 home router into a private, LAN-only voice terminal for a persistent ChatGPT web session. A phone or desktop browser supplies the microphone and speaker; Snowball bridges that audio to a headed Chromium session and keeps a recovery console available for sign-in, CAPTCHA, and permission prompts.
+![Snowball mascot with headset and original waveform](public/branding/banner.png)
 
-> [!IMPORTANT]
-> Snowball is an experimental, unofficial project. It drives the ChatGPT web interface rather than a stable automation API, so upstream UI or anti-bot changes can require maintenance. It is not affiliated with or endorsed by OpenAI.
+**Snowball-Voice** is the ESP32-S3 speaker client. **Snowball-Voice-Gate** is
+the LAN-only Gateway, Web Client, and recovery console for a persistent
+ChatGPT web Voice session.
 
-## What it does
+> Experimental developer preview. This unofficial project drives ChatGPT's
+> web interface, not a stable API. It is not affiliated with or endorsed by
+> OpenAI. Upstream UI/account restrictions can require maintenance.
 
-- Provides an installable voice PWA for iOS, iPadOS, and desktop browsers.
-- Carries bidirectional Opus audio over a LAN-only WebRTC connection.
-- Keeps the ChatGPT login in a persistent, headed Chromium profile.
-- Separates authentication from voice activation: opening the recovery console never starts Voice.
-- Exposes the real Chromium window through a touch-friendly noVNC console.
-- Sends Web Push alerts when login, CAPTCHA, or human recovery is required.
-- Restarts Chromium and reconnects the controller if the browser window is closed.
-- Grants microphone capture only to `https://chatgpt.com` and its HTTPS subdomains.
-- Protects Voice controls, settings, and the live browser with a separate local administrator session.
-- Provides schema-driven Admin settings for wake commands, localized project prompts, silence timing, and future client discovery.
-- Pairs the Waveshare ESP32-S3 Audio Board through authenticated desktop Chrome/Edge Web Serial without granting Docker USB access.
-- Parses explicit ChatGPT/Codex Project commands and supports safe turn-based ChatGPT Web Project automation when the required UI controls are present.
-- Runs as one read-only, non-root ARM64 container under a dedicated Docker daemon.
+## Start here
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for the component model, media flows, trust boundaries, and Mermaid diagrams.
+[Buy, install tools, compile, flash, pair, and run](docs/GETTING_STARTED.md).
+[Gateway platform-specific releases and setup](docs/PLATFORMS.md).
 
-## Network surface
+| Product | Role | Prepared version |
+| --- | --- | --- |
+| Snowball-Voice-Gate | Linux ARM64/AMD64 container; Windows/macOS use a LAN-connected Linux VM/host | `0.4.0-alpha.1` |
+| Snowball-Voice | Waveshare ESP32-S3-AUDIO-Board, 16 MB flash / 8 MB PSRAM | `0.4.0-alpha.1` |
+| Device protocol | Pinned HTTPS + PCMA DTLS-SRTP | `1` |
 
-Snowball intentionally exposes only three sockets on the configured private LAN address:
+Check [Releases](https://github.com/fkiller/snowball/releases) for actually
+published tags/assets. A prepared source version is not a downloadable-image
+claim. Existing identifiers stay `snowball-voice`, `/data`, and
+`snowball_speaker.bin` so upgrades preserve credentials.
 
-| Listener | Purpose |
-| --- | --- |
-| `192.168.1.1:8088/tcp` | Local CA download and HTTPS redirect |
-| `192.168.1.1:8443/tcp` | PWA, API, and browser recovery console |
-| `192.168.1.1:49000/udp` | WebRTC ICE and media |
+## What works
 
-Component ports `3000`, `3100`, `5900`, `6080`, `8080`, `9222`, `49001`, and `49002` bind to loopback only. No listener binds the WAN address.
+- Voice Web Client with explicit microphone/WebRTC start and stop.
+- Persistent Chromium and protected Browser Console for manual login/CAPTCHA.
+  Opening it never starts Voice.
+- Separate administrator authentication, CSRF/origin checks, strict bounded
+  JSON, and private state writes.
+- ESP32 `Hi ESP` wake model, bounded English command tails, candidate sync,
+  and bounded microphone/playback queues.
+- Desktop Chrome/Edge Web Serial pairing, pinned CA, P-256 identity,
+  one-use enrollment, and replay-protected control/media.
+- Prior physical full-duplex transport acceptance: **10m30s** with no drops or
+  unexpected resets. [Measured evidence](docs/FULL_DUPLEX_STABILITY.md).
 
-## Requirements
+## Fresh Linux Gateway install
 
-- An ARM64 Linux host or OpenWrt/FriendlyWrt router with Docker
-- A private IPv4 LAN address assigned to the host
-- About 1 GB of shared memory for Chromium
-- A client browser with microphone, WebRTC, service-worker, and Web Push support
-- Network access from Chromium to ChatGPT
+Set `SNOWBALL_LAN_IP` in `compose.yaml` to a private IPv4 address actually
+assigned to the Linux host, then:
 
-The checked-in defaults target the current router at `192.168.1.1`. Change the `SNOWBALL_*` values in `compose.yaml` for a different LAN.
-
-## Build and run
-
-The current image version is `0.3.1`.
-
-This is the checked-in release tag, not a runtime deployment claim. The
-router's current image and health must be checked with `docker ps` against its
-dedicated daemon; development candidate images are never deployed implicitly.
-
-```bash
-docker build --network host -t snowball-voice:0.3.1 .
+```sh
+git clone https://github.com/fkiller/snowball.git
+cd snowball
+docker build --network host -t snowball-voice:0.4.0-alpha.1 .
 docker compose up -d
 docker compose ps
 ```
 
-`--network host` is used only while downloading build dependencies. At runtime, nginx and the WebRTC gateway explicitly bind the configured private LAN address, while internal services bind loopback.
+Continue with [HTTPS and administrator/ChatGPT setup](docs/GETTING_STARTED.md#4-set-up-https-and-sign-in).
+Existing users follow [upgrade/rollback](docs/OPENWRT.md#upgrade-and-rollback).
+`Dockerfile.update` depends on an old local base and is not a first-install path.
 
-### Dedicated Docker daemon on OpenWrt
+## Boundaries and known limits
 
-The production router keeps its normal Docker daemon stopped so unrelated `unless-stopped` containers cannot start. Snowball uses the included daemon configuration and init script:
+Only the configured private LAN IPv4 exposes TCP **8088**, TCP **8443**, and
+UDP **49000**. CDP, VNC, internal APIs, and RTP stay loopback-only. No WAN
+forwarding, STUN/TURN, or cloud relay. ChatGPT/optional Web Push require
+outbound Internet; conversation audio goes to ChatGPT. [Privacy](docs/PRIVACY.md).
 
-- socket: `/var/run/snowball-voice-docker.sock`
-- data root: `/mnt/sdcard/snowball-voice-docker`
-- config: `runtime/daemon.json`
-- init script: `openwrt/snowball-voice-dockerd.init`
+The ESP32 firmware is for development: AEC is disabled, NVS is plaintext,
+and production Secure Boot, flash encryption, signed OTA, and anti-rollback
+are incomplete. The wake phrase is **Hi ESP**. Ordinary acoustic cycles,
+barge-in, and broader product acceptance remain open. Chromium currently uses
+`--no-sandbox` inside a constrained non-root container; keep the LAN boundary.
 
-After installing the init script as `/etc/init.d/snowball-voice-dockerd`:
+Visible ChatGPT Web Projects support bounded turn-based automation. Codex
+local projects return a capability error until a paired desktop adapter exists.
+USB setup requires desktop Chrome/Edge; phones can use the Web Client.
 
-```bash
-export DOCKER_HOST=unix:///var/run/snowball-voice-docker.sock
-/etc/init.d/snowball-voice-dockerd start
-docker build --network host -t snowball-voice:0.3.1 .
-docker compose up -d
-```
+## Documentation
 
-The dedicated daemon disables Docker bridge creation, IP forwarding, masquerading, and Docker-managed iptables rules. Snowball therefore does not add routes or modify the router's WAN, VPN, or policy-based routing rules.
-
-Because that daemon intentionally has no Docker bridge, ad-hoc build or test
-containers that need outbound DNS must use host networking explicitly, for
-example `docker build --network host` or `docker run --network host ...`.
-This is a development invocation detail; the router host and the production
-`snowball-voice` container retain their normal outbound network access, while
-the production container remains LAN-only for inbound listeners.
-
-`Dockerfile.update` is a router-specific shortcut that overlays source changes on the locally retained `snowball-voice:0.1.1` base image. New installations should use the full `Dockerfile`.
-
-## First-time setup
-
-1. Open `http://192.168.1.1:8088` from the client and install the generated local CA.
-2. On iPhone or iPad, enable full trust under **Settings → General → About → Certificate Trust Settings**.
-3. Read the one-time Snowball setup code with `docker logs snowball-voice`, open `https://192.168.1.1:8443`, and create the local administrator password.
-4. Optionally add Snowball to the Home Screen.
-5. Select **Open Browser Console** and sign in to ChatGPT. Snowball administrator authentication and ChatGPT authentication are separate; signing in never starts Voice.
-6. Return to Snowball and tap the center voice control to start a conversation.
-7. Open **Admin** to edit wake commands, project prompts, and turn timing. To configure a speaker, plug its USB-C port into the Admin computer, choose **Connect USB device**, and enter its Wi-Fi network. Enable alerts if you want recovery notifications for future login or CAPTCHA prompts.
-
-The console scales the `1360×900` Chromium desktop to the client viewport. Tap to click and use a two-finger gesture to scroll on touch screens.
-
-## Persistent and sensitive state
-
-The `/data` volume contains:
-
-- the Chromium profile and ChatGPT login session
-- the generated local CA and server certificate
-- VAPID keys and Web Push subscriptions
-- the Snowball administrator password hash and editable settings
-- gateway state
-
-Treat this volume like a credential store. None of that runtime state belongs in this repository or a Docker image.
-
-## Verification
-
-```bash
-export DOCKER_HOST=unix:///var/run/snowball-voice-docker.sock
-docker inspect --format '{{.State.Health.Status}}' snowball-voice
-curl -k https://192.168.1.1:8443/api/health
-netstat -lntup | grep -E '8088|8443|49000'
-npm run lint
-npm test
-cd gateway && go test -race ./... && go vet ./...
-```
-
-The browser smoke test opens the real Snowball UI with a synthetic client microphone, establishes WebRTC, confirms ChatGPT Voice becomes active, captures screenshots, and stops the session:
-
-```bash
-mkdir -p artifacts
-docker run --rm --network host --user 0 --shm-size 512m \
-  --cap-drop ALL --security-opt no-new-privileges:true \
-  -e SNOWBALL_TEST_OUTPUT=/artifacts \
-  -v "$PWD/tests/browser-smoke.mjs:/opt/snowball/tests/browser-smoke-runtime.mjs:ro" \
-  -v "$PWD/artifacts:/artifacts" \
-  --entrypoint node snowball-voice:0.3.1 \
-  /opt/snowball/tests/browser-smoke-runtime.mjs
-```
-
-For CI or router-side QA, use the isolated smoke runner instead. It creates a
-fresh, ephemeral administrator service account, uses a fake browser-controller
-service, and never mounts the production `/data` volume or ChatGPT profile:
-
-```bash
-./tools/run-qa-browser-smoke.sh
-```
-
-The QA account and password are generated inside the disposable container and
-are not written to the repository or production logs. This verifies the
-administrator session, WebRTC lifecycle, authoritative Voice state, and stop
-transition without requiring a user's credentials.
-
-## Repository layout
-
-| Path | Responsibility |
+| Document | Purpose |
 | --- | --- |
-| `app/` | Snowball PWA and voice/recovery controls |
-| `gateway/` | Go WebRTC gateway, browser orchestration API, and Web Push |
-| `services/` | Chromium controller attached through loopback CDP |
-| `container/` | nginx, PulseAudio, GStreamer, Chromium, noVNC, and Supervisor configuration |
-| `openwrt/` | Dedicated Docker daemon init script |
-| `runtime/` | Dedicated daemon configuration |
-| `tests/` | Source assertions and end-to-end browser smoke test |
+| [Getting started](docs/GETTING_STARTED.md) | Purchase → tools → compile → flash → pair → run |
+| [Platforms](docs/PLATFORMS.md) | Linux ARM64/AMD64, Windows, macOS, OpenWrt packages/setup |
+| [Architecture](ARCHITECTURE.md) | Components, media, persistence, trust boundaries |
+| [Firmware](firmware/esp32-s3-audio/README.md) | ESP32 implementation and USB protocol |
+| [Pairing acceptance](docs/PAIRING_ACCEPTANCE.md) | Board, registry, proof, runtime gates |
+| [Wake commands](docs/WAKE_COMMANDS.md) | Command tails and project behavior |
+| [Test scenarios](docs/TEST_SCENARIOS.md) | Physical/browser acceptance |
+| [OpenWrt operations](docs/OPENWRT.md) | Optional boot/migration and upgrade/rollback |
+| [Release plan](docs/RELEASE_PLAN.md) / [readiness](docs/RELEASE_READINESS.md) | Assets, gates, and actual results |
+| [Security](SECURITY.md) / [Contributing](CONTRIBUTING.md) | Private reports and development checks |
 
-## Current limitations
+## License
 
-- Home-LAN use only; there is no STUN or TURN configuration.
-- The ChatGPT web UI is an unstable integration boundary.
-- Web Push depends on the client browser and its push service.
-- The local CA must be explicitly trusted on every client.
-- Chromium currently runs with `--no-sandbox` inside a capability-dropped, non-root container; the container and LAN boundary are part of the security model.
-- The ESP32 development firmware uses `Hi ESP` to start the full-duplex Voice path, with a bounded English command tail (`Resume`, `with <voice>`, and project commands), USB/Wi-Fi provisioning, pinned-CA TLS enrollment, P-256 device proof, replay-protected control, and a PCMA DTLS-SRTP media adapter. A bare wake falls back to a new session after the bounded tail timeout. Physical paired full-duplex acceptance is still required; the custom `ChatGPT` WakeNet model, signed OTA, Secure Boot, and flash encryption remain production blockers.
-- The Chromium adapter can automate an exact visible ChatGPT Web Project in
-  bounded turn-based mode: it speaks the localized prompt, captures one turn
-  through ChatGPT's separate dictation control, submits it, and reads the
-  answer aloud. It cannot access a Codex local project without a future paired
-  ChatGPT desktop host.
-
-The internal service, volume, and daemon identifiers retain the `snowball-voice` prefix so existing router installations can upgrade without losing their persistent ChatGPT session.
-
-See [Speaker pairing acceptance](docs/PAIRING_ACCEPTANCE.md), [Wake commands and project turn mode](docs/WAKE_COMMANDS.md), [Client discovery and pairing security](docs/CLIENT_DISCOVERY_SECURITY.md), and the [Snowball-minis IoT handoff](docs/SNOWBALL_MINIS_HANDOFF.md) for the acceptance gates, command roadmap, trust model, and current development transfer procedure.
-
-The planned unattended paired-device test loop is documented in the
-[paired speaker emulator plan](docs/DEVICE_EMULATOR_PLAN.md). It keeps protocol,
-media, and local transcription testing separate from the remaining physical
-WakeNet, codec, and PSRAM acceptance gates.
+Project-authored Gateway and ESP32 source is **MIT**: [LICENSE](LICENSE).
+Espressif components/models retain Espressif-only conditions. Combined
+firmware and container images include other licenses and are not exclusively
+MIT. Read [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before redistribution.
+Third-party trademarks are not licensed by the project.

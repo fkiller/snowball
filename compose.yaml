@@ -1,6 +1,6 @@
 services:
   snowball-voice:
-    image: snowball-voice:0.3.1
+    image: snowball-voice:0.4.0-alpha.1
     container_name: snowball-voice
     network_mode: host
     restart: unless-stopped
@@ -11,7 +11,7 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      SNOWBALL_LAN_IP: 192.168.1.1
+      SNOWBALL_LAN_IP: ${SNOWBALL_LAN_IP:-192.168.1.1}
       SNOWBALL_HTTP_PORT: 8088
       SNOWBALL_HTTPS_PORT: 8443
       SNOWBALL_ICE_PORT: 49000
