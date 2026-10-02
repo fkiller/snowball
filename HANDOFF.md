@@ -1,159 +1,131 @@
-# Public release preparation handoff
+# Snowball public alpha publication
 
-**Handoff state: IN PROGRESS** — 2026-10-02 America/New_York.
+**Current task: COMPLETE** — 2026-10-02 America/New_York.
+This section is current. Archived transport notes below are historical evidence.
 
-## Active publication task (2026-10-02)
+## Objective and current state
 
-The user explicitly authorized publishing BOTH products through CI/CD,
-checking the actual pipeline, and making the visitor-facing repository public.
-Work is on `codex/publish-all-releases`, based on merged prep PR #1/main
-`a36f3f7`. New `release.yml` validates exact tag/source, calls all security
-checks, builds and scans both native images, packages locked firmware/all
-platforms, collects exact corresponding source and notices, uploads a draft,
-verifies all download hashes, and publishes the coordinated alpha.
-Existing physical/VM acceptance limitations remain explicit. No production
-restart, daemon migration, physical flashing or eFuse changes are authorized.
-Publication PR #10 merged after all six required jobs passed:
-https://github.com/fkiller/snowball/actions/runs/36966649736
-Main/tag commit: `9b260cc16d3999890ad12a1450dc5ca61a23fcf6`.
-Annotated `v0.4.0-alpha.1` has been pushed; actual publish workflow is running:
-https://github.com/fkiller/snowball/actions/runs/36967114243
-The repository is now PUBLIC (authorized by the user), main has strict six-check
-protection including admins, force-push/delete disabled, private vulnerability
-reporting enabled, secret scanning/push protection enabled, Dependabot alerts
-and security updates enabled, Actions default token read-only. No secret or
-open Dependabot alerts were present when checked.
+The user authorized publishing BOTH Snowball-Voice and Snowball-Voice-Gate
+through working CI/CD, verifying the actual pipeline, complete purchase/tool/
+compile/flash/install/run documentation, and supplied public artwork.
 
-Exact next action: inspect run 36967114243 using `gh run view`; do not duplicate
-or replace the tag. If a job fails, fix with a PR, preserve immutable tagged
-source, and decide whether the un-published alpha tag must be replaced ONLY if
-no release was published (prefer a new alpha version if tag changes required).
-Draft retries use `gh workflow run release.yml -f tag=v0.4.0-alpha.1`.
-Verify every download with:
-`node tools/verify-release-downloads.mjs fkiller/snowball v0.4.0-alpha.1 9b260cc16d3999890ad12a1450dc5ca61a23fcf6`.
-The script needs no token after PUBLIC publication; do not expose gh tokens.
-Finish docs/readiness and handoff with actual publication evidence and link.
+Both products are now published together in the PUBLIC developer prerelease:
+https://github.com/fkiller/snowball/releases/tag/v0.4.0-alpha.1
+Published 2026-10-02 10:56:22 UTC. Immutable tag/source:
+`9b260cc16d3999890ad12a1450dc5ca61a23fcf6`.
+31 release assets including manifest; 5,959,749,839 total bytes.
 
-New scripts: collect-image-sources.py runs only in a disposable image as root,
-uses exact authenticated APT source versions (missing versions fail), retains
-Node/noVNC source and copyright/common-license texts. package-image-release.sh
-adds project/Go source, saves and load-checks the image, splits source over 1.8GB.
-collect-idf-notices.py/package-firmware-release.mjs retain actual SDK and managed
-component notices, enforce four non-NVS ranges and matching locked IDF/version.
-prepare-release-manifest.mjs requires all five product/platform bundles, two
-image archives, corresponding sources and three SBOMs. Publisher uploads only
-a draft, verifies size/hash of every asset, publishes then verifies anonymously.
-Published releases cannot be overwritten by retries.
+## Completed work and verification
 
-Local validation on 21f4318: actionlint 1.7.12 clean; npm ci/audit zero findings;
-lint and web build/test 17 pass/3 Windows POSIX skips; docs links pass 28 files;
-firmware archive with SDK+managed notices built 3,793,052 bytes (no flash); exact
-IDF notice collector retained 128 entries; npm notice collector succeeded.
-Public GitHub visitor UI verified banner and icon both render correctly.
-CI PR #10 verified both native container builds/scans/QA, full-history secrets,
-Linux Go race/vet/vulnerability checks, web checks and locked IDF build.
+- Source prep PR #1: MIT scope/vendor restrictions, locked firmware, purchase/
+  tool/build/flash/pair/run guides, platform guides, privacy/security/contribution,
+  protected flash helpers, public artwork and six-check security workflow.
+- PR #10: full native ARM64/AMD64 image build/scan/QA, locked IDF build,
+  four Gateway platform bundles, corresponding source/notices/SBOMs, draft and
+  download verification publisher. Its six PR checks passed in run 36966649736.
+- Actual original release run 36967114243: all TEN validation/security/build/
+  package jobs PASSED. Image save/load exact-ID roundtrips, complete source
+  retention and firmware packaging passed. Initial publisher failed on draft
+  metadata lookup after uploading all assets; no gate was bypassed.
+- PR #11: authenticated draft-list fallback and provenance-checked recovery;
+  all six PR checks passed in run 36968500072. Its first recovery attempt
+  36968844009 stopped on a redundant read-only draft lookup.
+- PR #12: keep draft lookup only in write-scoped publisher. Six PR checks passed:
+  https://github.com/fkiller/snowball/actions/runs/36997747291
+- SUCCESSFUL CI publication, with authenticated then anonymous size/SHA-256
+  verification of ALL 30 downloadable files (~5.96 GB):
+  https://github.com/fkiller/snowball/actions/runs/36998111226
+  Both validate and publish jobs passed. Logs contain two complete verification
+  messages at 10:56:21 UTC and 10:56:46 UTC. No manual binary publication.
+- Anonymous API/manifest/image-ID downloads independently confirmed public
+  visibility, both product names, exact source SHA, 31 assets and image IDs.
+- Local actual authenticated verification of all 30 draft downloads also passed.
+  Tokens stayed in temporary process environment and were removed afterward.
+- actionlint 1.7.12 and documentation links pass. Prior local npm ci/audit zero
+  findings, lint/build/test 17 pass and three Windows POSIX skips; Linux CI
+  runs migration/flash guards, Go race/vet/govulncheck, Gitleaks and IDF builds.
+- Approved logo-free banner and icon both render in GitHub visitor README;
+  application/PWA branding applied. Original supplied logo images remain ignored.
 
-## Earlier preparation objective and task
+## Architecture and release decisions
 
-Prepare the public Snowball-Voice ESP32 client and Snowball-Voice-Gate Gateway
-repository. User authorized repository updates, MIT for project-authored code
-with Espressif constraints preserved, complete purchase/tool/build/run guides,
-platform-specific Gateway bundles, and a release plan. User approved replacing
-the OpenAI logo in the supplied artwork with an original audio waveform.
-Production deployment, daemon migration, physical flashing, and eFuse changes
-were not requested and must not occur during source preparation.
+One coordinated alpha tag covers both products and protocol 1. Preserve
+`snowball-voice` container/volume/state, `/data`, and `snowball_speaker.bin`.
+Linux ARM64/AMD64 use ready-to-load Docker archives. Windows x64/ARM64 and
+macOS Intel/Apple Silicon bundles use SSH to a reachable LAN Linux VM/host;
+these are not native desktop Chromium/audio-server executables.
 
-## Current state and completed work
+Each image accompanies exact authenticated Debian source descriptors/orig/
+debian/build scripts, Node/noVNC sources, Go dependency/project source,
+copyright/common-license texts and SBOMs. Missing versions fail publication.
+Large source archives are split below 1.8 GB per part with checksums and rebuild
+instructions. Own code MIT does not relicense combined binaries. ESP-only
+esp-sr/esp_peer/models and SDK notices accompany the ESP32 firmware.
+Supported firmware: Waveshare ESP32-S3-AUDIO-Board, 16 MB flash / 8 MB PSRAM.
+Firmware archive includes only four approved non-NVS ranges and exact IDF 5.5.5
+build metadata. Never erase or write NVS at 0x9000.
 
-- Prepared coordinated version 0.4.0-alpha.1; protocol remains 1. Container,
-  volume, state, binary filenames, and production runtime stay compatible.
-- MIT scope and Espressif restricted license texts documented; compiled
-  firmware/container distribution retains vendor/copyleft obligations.
-- README, complete getting-started guide, platform matrix, privacy/security,
-  contribution/reporting templates, release plan, readiness record added.
-- Public logo-free banner/icon and PWA branding added; original root images
-  remain locally ignored.
-- New USB enrollment defaults to the Snowball-Voice display name; existing
-  user-assigned device names and protocol identifiers are preserved.
-- Windows/macOS launchers control a LAN Linux VM/host; Linux ARM64/AMD64 image
-  jobs and platform packaging are provided. Native desktop Docker cannot bind
-  the desktop's LAN interface as required; do not claim its acceptance.
-- npm scripts work in PowerShell; vulnerable tooling/transitives updated
-  without changing frameworks. Current full npm audit reports zero findings.
-- Protected local flash helpers preserve NVS and reject range overflows.
-- Router boot helpers preserved and optional migration rewritten to stop the
-  old instance before state copy, preserve environment/image, and roll back.
-  Three Linux mocked lifecycle/rollback tests pass; no live migration performed.
-- Fresh Windows ESP-IDF 5.5.5 build passes, app 0x221e30 bytes (29% free).
-  Windows vendor model-report encoding requires PYTHONUTF8/PYTHONIOENCODING;
-  setup documentation includes those settings.
-- Latest Windows web install/audit/lint/build pass; 15 web and 2 flash-guard tests pass and 3
-  POSIX migration tests skip. Linux migration tests pass separately.
-- Linux ARM64 Gateway race/vet pass. GitHub Linux Go 1.26.8 race/vet/govulncheck
-  pass after fixing vulnerable Go 1.26.5 and x/crypto 0.53.0 (now 0.55.0).
-- Linux CI IDF 5.5.5 firmware build, ARM64/AMD64 image build, Trivy gate,
-  authenticated media start/stop smoke, and image SBOM generation pass.
-  Screenshot artifact export required a host-group/setgid fix. All six jobs now
-  pass on 4d0fe77 in run 36963388762, including screenshots and both image SBOMs.
-  No failing gate is bypassed; the documentation confirmation has its own CI.
-- ESP32 plus four Gateway platform bundles and checksums were generated from
-  clean commits, most recently eda00d9, in ignored artifacts/releases-eda00d9/.
-  Final image SBOMs/screenshots are in artifacts/ci-final/. No binary/tag/image publication.
-- Dependabot vulnerability alerts enabled and GitHub description/topics updated.
-  Repository remains private. Branch protection API returns 403 requiring Pro
-  or public visibility; private vulnerability reporting is not available yet.
+## Files and operating commands
 
-## Exact next action and remaining work
+- `release.yml`: tag-triggered full two-product pipeline; exact-ref reusable
+  `security-gate.yml`; publisher alone has contents-write permission.
+- `finish-release.yml`: recovery requires original tag SHA/run identity and all
+  ten successful original jobs, then downloads/revalidates their artifacts.
+  Read-only validate checks provenance; write-scoped publisher checks draft.
+- `verify-release-downloads.mjs`: strict commit/tag/count/size/hash verifier,
+  authenticated draft-list fallback, anonymous verification after publication.
+- `prepare-release-manifest.mjs`, `package-*-release.*`, `collect-*-notices.*`,
+  `collect-image-sources.py`: complete artifact/source/license packaging.
+- `download-gate-image.sh`, `gate-start.sh`, `gate-windows.ps1`, `gate-macos.sh`:
+  checksum/load, LAN-only installation, and Linux-VM SSH launchers.
+- README, GETTING_STARTED, PLATFORMS, RELEASE_PLAN, RELEASE_NOTES,
+  RELEASE_READINESS: public navigation, installation, exact evidence and limits.
 
-Read docs/RELEASE_READINESS.md and inspect PR #1 checks:
-https://github.com/fkiller/snowball/pull/1 . Source preparation is complete;
-confirm the PR is merged into main after its final documentation CI is green.
-If it is already merged, do not redo preparation. The next product milestone
-is the manual/binary checklist in docs/RELEASE_READINESS.md. Source preparation
-does not itself change private visibility. At the source-publication milestone
-apply the documented security/protection settings.
-Tag/binary publication stays separate until binary/license/manual gates pass.
-Repackage from the final coordinated tag before publishing reviewed artifacts.
-Do not advertise a registry image or successful physical cases that do not exist.
+```powershell
+codexbar --format json
+& ./artifacts/actionlint/actionlint.exe -shellcheck '' -pyflakes ''
+node tools/check-doc-links.mjs
+gh run view 36998111226
+gh release view v0.4.0-alpha.1 --json isDraft,isPrerelease,assets,url
+# Anonymous verifier (large download; all files already passed in CI):
+node tools/verify-release-downloads.mjs fkiller/snowball v0.4.0-alpha.1 9b260cc16d3999890ad12a1450dc5ca61a23fcf6
+```
 
-## Architecture and reconciliation
+Published artifacts/tags are immutable. Do not retry recovery for this already
+published release. For future versions, bump all versioned source/config/helper
+references, pass a PR's checks and push a new coordinated alpha tag. Do not
+move v0.4.0-alpha.1 or overwrite its binaries/source/checksums.
 
-The local source started at 39cfc44, including all transport/watchdog fixes.
-Router HEAD b702a4c has independent uncommitted Docker changes. Its exact patch
-and original new scripts are preserved locally in ignored
-artifacts/router-prep-snapshot/. The router worktree is untouched. Keep its
-changes: never overwrite it with a sync or reset. Build under the separate
-/tmp/snowball-public-prep checkout and snowball-voice:public-prep-test tag.
-The live router still uses unix:///var/run/snowball-voice-docker.sock and runs
-snowball-voice:0.3.10-full-duplex, healthy at inspection.
+## Known limits, constraints and next action
 
-## Verification, commands, and known limits
+No publication work remains. The next product milestones are manual physical
+spoken/acoustic/ghost-wake/barge-in acceptance, Windows/macOS VM onboarding,
+real upgrade/reboot acceptance and production security. They were NOT executed
+for this tag. Prior 10m30s transport evidence is separate. Hi ESP wake phrase,
+AEC disabled, development NVS plaintext, incomplete Secure Boot/encrypted flash/
+signed OTA/anti-rollback remain explicit alpha limitations. ChatGPT web adapter
+is unofficial and can break with upstream UI/account restrictions.
 
-Use CONTRIBUTING.md for required checks, docs/GETTING_STARTED.md for firmware,
-docs/PLATFORMS.md for platform installation, and docs/RELEASE_PLAN.md for release
-packaging. Final results belong in docs/RELEASE_READINESS.md. Gitleaks 8.30.1
-baseline full-history scan of 35 commits and final 41-commit scan found no secrets;
-tracked-source 1.03 MB scan passes. Final CI scans all history; repeat for the tag.
-Native Windows full Gateway tests still have POSIX-permission and /tmp failures;
-Linux race results are authoritative.
+No production deployment, restart/migration, physical flash or eFuse change
+occurred during publication; those actions require explicit user authorization.
+LAN-only: no wildcard/WAN/STUN/TURN/cloud relay. Never commit profiles, /data,
+keys, credentials, NVS or full factory backups. Router /root/snowball-voice has
+independent dirty changes at b702a4c; never overwrite/reset. Snapshot remains
+ignored in artifacts/router-prep-snapshot. Use the dedicated Docker socket
+unix:///var/run/snowball-voice-docker.sock if inspecting. Production image remains
+snowball-voice:0.3.10-full-duplex; no current health claim replaces an actual check.
 
-Physical three-cycle/acoustic/barge-in acceptance, Windows/macOS VM onboarding,
-real migration/reboot, binary license/source-offer review remain open. AEC is
-disabled; development NVS is plaintext; production Secure Boot/flash encryption/
-signed OTA/anti-rollback are incomplete. Normal flashing never writes NVS 0x9000.
+## Repository and Git state
 
-## Git state and important files
-
-Work branch: codex/public-release-prep, PR #1 to main. Major preparation commits:
-8675ab3 (guides/license/branding/tools), 63cc3a3 (Go security + CI toolchain),
-9611909/c09aa8e/eda00d9 (isolated QA host/home/artifact access and binary notices).
-4d0fe77 fixes private screenshot group access; all six checks pass. The subsequent
-documentation confirmation records the final evidence. Inspect actual git
-status/log and PR state before continuing. Runtime/
-build artifacts and original artwork are ignored. No stash was created.
-Root README links all user guides; tools/package-*-release.mjs
-and .github/workflows/prepare-release.yml prepare review artifacts without
-publishing or deploying. Optional operations are documented in docs/OPENWRT.md.
+Public; strict six-check up-to-date main protection including admins; force-push
+and deletion disabled. Secret scanning/push protection/private vulnerability
+reporting and Dependabot alerts/updates enabled; Actions default read-only.
+No open secret/Dependabot alerts at publication settings check. Use a new PR,
+not direct main push, for future changes. The final evidence update is on
+`codex/published-alpha-evidence`, based on main merge `0c685eb` (PR #12).
+No stash or uncommitted runtime work. Ignored original artwork, review bundles,
+QA screenshots and local build artifacts remain local; none entered source
+archives. The earlier quota handoff is resolved after the usage window reset.
 
 ---
 

@@ -29,6 +29,10 @@ published tags/assets. CI publishes both products with verified downloads,
 Linux image archives, source, licenses, and SBOMs. Existing identifiers stay `snowball-voice`, `/data`, and
 `snowball_speaker.bin` so upgrades preserve credentials.
 
+The [0.4.0-alpha.1 release](https://github.com/fkiller/snowball/releases/tag/v0.4.0-alpha.1)
+is public. [CI publication and anonymous verification passed](https://github.com/fkiller/snowball/actions/runs/36998111226)
+for every download; physical and VM acceptance limits remain documented below.
+
 ## What works
 
 - Voice Web Client with explicit microphone/WebRTC start and stop.

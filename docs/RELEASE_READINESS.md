@@ -1,6 +1,6 @@
 # Release readiness
 
-Prepared version: **0.4.0-alpha.1**, experimental source preview, protocol 1.
+Published version: **0.4.0-alpha.1**, experimental binary alpha, protocol 1.
 This is a verification record, not a declaration of production readiness.
 
 ## Baseline (2026-10-01, America/New_York)
@@ -65,11 +65,32 @@ the router worktree, daemon, credentials, and ESP32 were not changed.
 Publication PR [#10](https://github.com/fkiller/snowball/pull/10) merged after
 [all six required checks passed](https://github.com/fkiller/snowball/actions/runs/36966649736).
 The immutable alpha tag points to `9b260cc16d3999890ad12a1450dc5ca61a23fcf6`.
-[Actual two-product publication pipeline](https://github.com/fkiller/snowball/actions/runs/36967114243)
+[Two-product build/package pipeline](https://github.com/fkiller/snowball/actions/runs/36967114243)
 rebuilds, scans and smoke-tests the shipped ARM64/AMD64 images, collects exact
 corresponding source/notices, compiles locked firmware with SDK/component
 notices, and packages all four Gateway platforms. Native image save/load
-roundtrips passed. Final status is recorded in the workflow and Release page.
+roundtrips passed. All ten validation/security/build/package jobs passed;
+the original publisher stopped on draft metadata lookup. The tag and tested
+artifacts were preserved while the lookup and permission boundary were fixed.
+
+[Successful CI publication and download verification](https://github.com/fkiller/snowball/actions/runs/36998111226)
+published [both products in v0.4.0-alpha.1](https://github.com/fkiller/snowball/releases/tag/v0.4.0-alpha.1)
+at **2026-10-02 10:56:22 UTC**. Recovery validation required the exact tag
+commit and all ten original jobs to pass. The publisher checked all 30
+download files before publishing, then repeated every size/SHA-256 check
+without authentication; both full verifications passed. The public release
+has **31 assets** including its manifest, totaling **5,959,749,839 bytes**.
+All publication occurred through CI; no production deployment or flash occurred.
+
+| Shipped artifact | Verified identity |
+| --- | --- |
+| ESP32-S3 firmware archive | SHA-256 `91e7587a9b81536f36df36a99acc8e669ca62ff38434d5da8c1b13aebb2f3cb4`, 3,807,540 bytes |
+| ARM64 saved Docker image | `sha256:5db0bfc3a10821f618d98a0080bb4b1a57afb51f1a640eb50d3c4f1abf06e5da` |
+| AMD64 saved Docker image | `sha256:04fb5a6609750a86b18a6a587ea4eb6e0dba2f0cb3b8d097f65bf0596671a87f` |
+
+The manifest pins all file sizes/hashes and source commit. The image identities
+above are Docker image IDs; archive checksums are separate manifest entries.
+The physical/VM/manual cases below remain open despite successful publication.
 
 The repository is now public. Strict required-check main protection, secret
 scanning/push protection, private vulnerability reporting and Dependabot updates
