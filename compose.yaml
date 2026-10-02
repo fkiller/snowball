@@ -1,6 +1,6 @@
 services:
   snowball-voice:
-    image: snowball-voice:0.1.6
+    image: snowball-voice:0.4.0-alpha.1
     container_name: snowball-voice
     network_mode: host
     restart: unless-stopped
@@ -11,12 +11,14 @@ services:
     security_opt:
       - no-new-privileges:true
     environment:
-      SNOWBALL_LAN_IP: 192.168.1.1
+      SNOWBALL_LAN_IP: ${SNOWBALL_LAN_IP:-192.168.1.1}
       SNOWBALL_HTTP_PORT: 8088
       SNOWBALL_HTTPS_PORT: 8443
       SNOWBALL_ICE_PORT: 49000
       SNOWBALL_UPLINK_RTP_PORT: 49001
       SNOWBALL_DOWNLINK_RTP_PORT: 49002
+      SNOWBALL_DEVICE_UPLINK_RTP_PORT: 49003
+      SNOWBALL_DEVICE_DOWNLINK_RTP_PORT: 49004
       CHATGPT_URL: https://chatgpt.com/
       TZ: America/New_York
     volumes:

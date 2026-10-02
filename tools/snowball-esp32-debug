@@ -1,0 +1,120 @@
+#!/bin/sh
+set -eu
+
+BOARD_HELPER=${SNOWBALL_BOARD_HELPER:-/usr/libexec/snowball-board.sh}
+if [ ! -r "$BOARD_HELPER" ]; then
+    BOARD_HELPER="$(CDPATH= cd -- "$(dirname "$0")" && pwd)/snowball-board.sh"
+fi
+# shellcheck disable=SC1090
+. "$BOARD_HELPER"
+LOG_DIR="/mnt/sdcard/snowball-dev/device-logs/$BOARD_LOG_ID"
+LOG_FILE="$LOG_DIR/serial.current.log"
+
+valid_lines() {
+    case "$1" in (*[!0-9]*|'') return 1 ;; esac
+    [ "$1" -ge 1 ] && [ "$1" -le 10000 ]
+}
+
+usage() {
+    printf 'usage: snowball-esp32-debug status|probe|tail [lines]|events [lines]|report [minimum-cycles]|watch\n' >&2
+    exit 2
+}
+
+probe() {
+    command -v socat >/dev/null 2>&1 || {
+        printf '%s\n' 'probe requires socat on the router; collector logs remain available.' >&2
+        return 1
+    }
+    probe_output=$(mktemp /tmp/snowball-esp32-probe.XXXXXX)
+    probe_error=$(mktemp /tmp/snowball-esp32-probe-error.XXXXXX)
+    cleanup_probe() {
+        rm -f "$probe_output" "$probe_error"
+        /etc/init.d/snowball-esp32-debug start >/dev/null 2>&1 || true
+    }
+    trap cleanup_probe EXIT INT TERM
+    # USB Serial/JTAG has one owner.  The collector is deliberately stopped
+    # before this short diagnostic session and is always restored by the trap.
+    /etc/init.d/snowball-esp32-debug stop >/dev/null 2>&1 || true
+    sleep 1
+    device=$(find_board) || {
+        printf '%s\n' 'board is not connected' >&2
+        return 1
+    }
+    {
+        printf '%s\n' '{"version":1,"id":"probe-hello","op":"hello"}'
+        sleep 1
+        printf '%s\n' '{"version":1,"id":"probe-status","op":"status"}'
+        sleep 1
+        printf '%s\n' '{"version":1,"id":"probe-audio","op":"audio-self-test"}'
+        sleep 2
+        printf '%s\n' '{"version":1,"id":"probe-network","op":"network-test"}'
+        sleep 8
+        printf '%s\n' '{"version":1,"id":"probe-trace","op":"trace"}'
+        sleep 2
+    } | socat -T 10 - "OPEN:$device,b115200,raw,echo=0,clocal=1,hupcl=0,crtscts=0" >"$probe_output" 2>"$probe_error" || true
+
+    # Keep this output useful when pasted into a bug report without exposing
+    # the device identity or public key.  Only complete JSON responses are
+    # emitted; ROM text and boot logs remain in the bounded collector log.
+    json_lines=$(grep -E '^\{' "$probe_output" | sed -E \
+        's/"hardwareId":"[^"]+"/"hardwareId":"<redacted>"/g; s/"publicKey":"[^"]+"/"publicKey":"<redacted>"/g; s/"publicKeyFingerprint":"[^"]+"/"publicKeyFingerprint":"<redacted>"/g')
+    if [ -z "$json_lines" ]; then
+        printf '%s\n' 'the board returned no diagnostic response' >&2
+        sed -n '1,20p' "$probe_error" >&2 || true
+        return 1
+    fi
+    printf '%s\n' "$json_lines"
+}
+
+command=${1:-status}
+case "$command" in
+    status)
+        /etc/init.d/snowball-esp32-debug status || true
+        if device=$(find_board); then
+            printf 'board: connected (%s)\n' "$device"
+        else
+            printf 'board: disconnected\n'
+        fi
+        if [ -f "$LOG_FILE" ]; then
+            printf 'log: %s (%s bytes)\n' "$LOG_FILE" "$(stat -c '%s' "$LOG_FILE")"
+            tail -n 1 "$LOG_FILE" || true
+        else
+            printf 'log: not created\n'
+        fi
+        ;;
+    probe)
+        probe
+        ;;
+    tail)
+        lines=${2:-100}
+        valid_lines "$lines" || usage
+        [ -f "$LOG_FILE" ] || { printf 'log: not created\n' >&2; exit 1; }
+        tail -n "$lines" "$LOG_FILE"
+        ;;
+    events)
+        lines=${2:-100}
+        valid_lines "$lines" || usage
+        [ -f "$LOG_FILE" ] || { printf 'log: not created\n' >&2; exit 1; }
+        { index=7; while [ "$index" -ge 1 ]; do archive="$LOG_DIR/serial.$index.log.gz"; [ -f "$archive" ] && gzip -cd "$archive"; index=$((index - 1)); done; cat "$LOG_FILE"; } |
+            grep -E '"event":"(debug|wake|command)"|MultiNet|WakeNet|device event delivery' | tail -n "$lines"
+        ;;
+    report)
+        minimum=${2:-3}
+        valid_lines "$minimum" || usage
+        [ -f "$LOG_FILE" ] || { printf 'log: not created\n' >&2; exit 1; }
+        report_tool=${SNOWBALL_VOICE_REPORT_TOOL:-/usr/bin/snowball-esp32-voice-report}
+        if [ ! -x "$report_tool" ]; then
+            report_tool="$(CDPATH= cd -- "$(dirname "$0")" && pwd)/esp32-voice-trace-report.sh"
+        fi
+        [ -x "$report_tool" ] || {
+            printf 'trace report tool is not installed: %s\n' "$report_tool" >&2
+            exit 1
+        }
+        "$report_tool" "$LOG_FILE" "" "$minimum"
+        ;;
+    watch)
+        [ -f "$LOG_FILE" ] || { printf 'log: not created\n' >&2; exit 1; }
+        tail -n 50 -f "$LOG_FILE"
+        ;;
+    *) usage ;;
+esac

@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { VoiceConsole } from "./voice-console";
+import { SnowballApp } from "./snowball-app";
 
 export const metadata: Metadata = {
-  title: "Snowball",
+  title: "Snowball-Voice-Gate",
   description: "A private, room-scale bridge to ChatGPT Voice.",
 };
 
 export default function Home() {
-  return <VoiceConsole />;
+  return <SnowballApp />;
 }

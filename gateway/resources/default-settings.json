@@ -1,0 +1,37 @@
+{
+  "version": 2,
+  "language": "ko-KR",
+  "wakeWord": {
+    "enabled": true,
+    "phrase": "ChatGPT",
+    "resumeAliases": ["resume"],
+    "projectAliases": ["project"],
+    "codexAliases": ["codex"]
+  },
+  "voice": {
+    "defaultName": "",
+    "withAliases": ["with", "voice"]
+  },
+  "turnBased": {
+    "silenceThresholdMs": 1800,
+    "maxUtteranceMs": 120000
+  },
+  "discovery": {
+    "deviceName": "Snowball",
+    "pairingWindowSeconds": 300
+  },
+  "prompts": {
+    "ko-KR": {
+      "projectReady": "{{projectName}} 프로젝트에 대한 질문이나 요청을 말씀하세요.",
+      "projectNext": "또 다른 {{projectName}} 프로젝트에 대한 질문이나 요청이 있으시면 말씀하세요. 없으시면 ‘종료’라고 말씀해주세요.",
+      "projectUnavailable": "{{projectName}} 프로젝트를 사용할 수 없습니다. 브라우저 콘솔을 확인해주세요.",
+      "exitCommands": ["종료", "끝", "그만"]
+    },
+    "en-US": {
+      "projectReady": "Please say your question or request for the {{projectName}} project.",
+      "projectNext": "Say another question or request for the {{projectName}} project, or say ‘exit’ when you are finished.",
+      "projectUnavailable": "The {{projectName}} project is unavailable. Please check Browser Console.",
+      "exitCommands": ["exit", "quit", "stop"]
+    }
+  }
+}

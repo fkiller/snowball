@@ -13,13 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Snowball",
+  title: "Snowball-Voice-Gate",
   description: "Private ChatGPT Voice gateway for the Snowball home network.",
-  applicationName: "Snowball",
+  applicationName: "Snowball-Voice-Gate",
+  icons: { icon: "/branding/icon.png", apple: "/branding/icon.png" },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Snowball",
+    title: "Snowball-Voice-Gate",
   },
 };
 

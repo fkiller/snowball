@@ -1,9 +1,26 @@
-FROM golang:1.24-bookworm AS gateway-builder
+FROM golang:1.26.8-bookworm AS gateway-builder
 WORKDIR /src
-COPY gateway/go.mod ./
+COPY gateway/go.mod gateway/go.sum ./
 RUN go mod download
 COPY gateway/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/snowball-gateway .
+RUN GOMAXPROCS=1 CGO_ENABLED=0 GOOS=linux go build -p=1 -trimpath -ldflags="-s -w" -o /out/snowball-gateway .
+
+FROM node:22-bookworm-slim AS web-builder
+
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+WORKDIR /src
+COPY package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+COPY app ./app
+COPY build ./build
+COPY db ./db
+COPY drizzle ./drizzle
+COPY examples ./examples
+COPY public ./public
+COPY worker ./worker
+COPY .openai ./.openai
+COPY drizzle.config.ts eslint.config.mjs next-env.d.ts next.config.ts postcss.config.mjs tsconfig.json vite.config.ts ./
+RUN npm run build
 
 FROM node:22-bookworm-slim
 
@@ -19,7 +36,9 @@ ENV DEBIAN_FRONTEND=noninteractive \
     SNOWBALL_HTTPS_PORT=8443 \
     SNOWBALL_ICE_PORT=49000 \
     SNOWBALL_UPLINK_RTP_PORT=49001 \
-    SNOWBALL_DOWNLINK_RTP_PORT=49002
+    SNOWBALL_DOWNLINK_RTP_PORT=49002 \
+    SNOWBALL_DEVICE_UPLINK_RTP_PORT=49003 \
+    SNOWBALL_DEVICE_DOWNLINK_RTP_PORT=49004
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       chromium \
@@ -55,24 +74,19 @@ RUN curl -fsSL "https://github.com/novnc/noVNC/archive/refs/tags/v${NOVNC_VERSIO
 COPY container/chromium-policy.json /etc/chromium/policies/managed/snowball-voice.json
 
 WORKDIR /opt/snowball
+COPY LICENSE THIRD_PARTY_NOTICES.md ./
+COPY LICENSES ./LICENSES
 COPY package.json package-lock.json ./
-RUN npm install --ignore-scripts
-COPY app ./app
-COPY build ./build
-COPY db ./db
-COPY drizzle ./drizzle
-COPY examples ./examples
-COPY public ./public
-COPY tests ./tests
-COPY worker ./worker
-COPY .openai ./.openai
-COPY drizzle.config.ts eslint.config.mjs next-env.d.ts next.config.ts postcss.config.mjs tsconfig.json vite.config.ts ./
+RUN npm ci --omit=dev --ignore-scripts \
+    && npm cache clean --force \
+    && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack /opt/yarn-v1.22.22 \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY services ./services
 COPY container ./container
+COPY --from=web-builder /src/dist ./dist
 COPY --from=gateway-builder /out/snowball-gateway /usr/local/bin/snowball-gateway
 
 RUN chmod +x container/*.sh /usr/local/bin/snowball-gateway \
-    && npm run build \
     && mkdir -p /data/certs /data/chromium /data/state /data/home/pwuser \
     && chown -R pwuser:pwuser /data
 
@@ -81,6 +95,6 @@ EXPOSE 8088/tcp 8443/tcp 49000/udp
 
 USER pwuser
 HEALTHCHECK --interval=30s --timeout=5s --start-period=90s --retries=3 \
-  CMD curl -fsS http://127.0.0.1:8080/api/status >/dev/null || exit 1
+  CMD curl -fsS http://127.0.0.1:8080/api/health >/dev/null || exit 1
 
 ENTRYPOINT ["/usr/bin/supervisord", "-c", "/opt/snowball/container/supervisord.conf"]

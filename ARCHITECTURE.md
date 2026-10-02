@@ -108,6 +108,8 @@ Chromium policy pre-authorizes audio capture only for `https://chatgpt.com` and 
 
 Authentication is a human recovery workflow, not a voice-start side effect.
 
+Snowball administrator authentication is an additional, separate boundary. On first start the Gateway writes a one-time setup code to protected state and the container log. The user exchanges it for an administrator password; the password is stored as a salted adaptive hash. Voice, WebRTC, Push, settings, and Browser Console access then require a Secure/HttpOnly/SameSite session. State-changing API calls also require a session-bound CSRF token and a same-origin request.
+
 ```mermaid
 sequenceDiagram
     actor User
@@ -117,6 +119,9 @@ sequenceDiagram
     participant Chrome as Chromium
 
     User->>PWA: Open Browser Console
+
+    PWA->>GW: Snowball administrator session
+    GW-->>PWA: Secure session + CSRF token
     PWA-->>User: Live Chromium desktop via noVNC
     User->>Chrome: Sign in / solve challenge
     BC->>Chrome: Inspect cookies and page state
@@ -190,6 +195,9 @@ Defense-in-depth controls include:
 - TLS from a device-local CA for secure-context browser features
 - a loopback-only CDP endpoint and a Chromium audio-capture allowlist
 - persistent secrets and browser credentials only in the Docker volume
+- first-run administrator bootstrap, rate-limited login, in-memory sessions, and an authenticated noVNC proxy
+- origin and CSRF checks for every state-changing control request
+- schema-driven validation and atomic private writes for editable settings
 
 The headed Chromium process currently requires `--no-sandbox` in this container. The container restrictions and router firewall are therefore essential boundaries rather than optional hardening.
 
@@ -218,6 +226,10 @@ The image is replaceable; `/data` is not. Upgrades must preserve the existing na
 - **Local TLS:** a private CA enables microphone and service-worker features without a public hostname, at the cost of per-device certificate enrollment.
 - **Host networking:** it avoids Docker bridge and router-policy interference, but demands strict explicit binding and makes the host firewall part of the design.
 - **Persistent web session:** it avoids storing an OpenAI password in application code, but makes the Chromium volume highly sensitive.
+- **Separate local authentication:** ChatGPT cookies stay origin-bound inside Chromium and never become Gateway credentials. This adds one Snowball login but prevents any LAN client from inheriting browser-control authority.
+- **Wake input is client-specific:** command parsing and browser execution live in the Gateway, while an ESP32 must detect the wake phrase locally. Browser speech services are not silently used because they can leave the LAN.
+
+See [Wake commands and project turn mode](docs/WAKE_COMMANDS.md) and [Client discovery and pairing security](docs/CLIENT_DISCOVERY_SECURITY.md) for the command contract, capability boundaries, first-power user stories, and future device trust model.
 
 ## Source map
 

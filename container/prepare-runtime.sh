@@ -5,6 +5,12 @@ mkdir -p /data/certs /data/chromium /data/state /data/home/pwuser /tmp/pulse /tm
   /tmp/nginx-client /tmp/nginx-proxy /tmp/nginx-fastcgi /tmp/nginx-uwsgi /tmp/nginx-scgi
 chmod 700 /data/certs /data/chromium /data/state /data/home/pwuser /tmp/pulse /tmp/runtime-pwuser
 
+# Gateway and nginx both call this helper during supervisor startup. Hold one
+# persistent descriptor while creating the CA/server pair so concurrent
+# invocations cannot mix a newly generated key with another process's cert.
+exec 9>/data/certs/.prepare-runtime.lock
+flock -x 9
+
 if [[ ! -s /data/certs/ca.key || ! -s /data/certs/ca.crt ]]; then
   openssl genrsa -out /data/certs/ca.key 3072
   openssl req -x509 -new -sha256 -days 3650 \
