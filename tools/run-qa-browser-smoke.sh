@@ -5,6 +5,10 @@ ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 IMAGE=${SNOWBALL_QA_IMAGE:-snowball-voice:test}
 ARTIFACT_DIR=${SNOWBALL_TEST_OUTPUT:-$ROOT_DIR/artifacts/qa}
 mkdir -p "$ARTIFACT_DIR"
+# Retain only synthetic QA screenshots in a new private directory. Give the
+# capability-free container its host owner's group for writing the bind mount.
+RUN_ARTIFACT_DIR=$(mktemp -d "$ARTIFACT_DIR/run.XXXXXX")
+chmod g+rwx "$RUN_ARTIFACT_DIR"
 
 # The Gateway requires an assigned private IPv4. CI runners do not have the
 # production router address; detect a private host interface for test ports.
@@ -15,9 +19,10 @@ QA_LAN_IP=${SNOWBALL_QA_LAN_IP:-$(ip -4 -o address show scope global | awk '{spl
 # container. No source tree, /data volume, browser profile, or USB device is
 # shared with the production router container.
 docker run --rm --network host --user 0 --shm-size 256m \
+  --group-add "$(id -g)" \
   -e SNOWBALL_QA_LAN_IP="$QA_LAN_IP" \
   --cap-drop ALL --security-opt no-new-privileges:true \
   -v "$ROOT_DIR/tools/qa-browser-smoke-runner.sh:/opt/qa-browser-smoke-runner.sh:ro" \
   -v "$ROOT_DIR/tests/browser-smoke.mjs:/opt/snowball/tests/browser-smoke-runtime.mjs:ro" \
-  -v "$ARTIFACT_DIR:/artifacts" \
+  -v "$RUN_ARTIFACT_DIR:/artifacts" \
   --entrypoint /opt/qa-browser-smoke-runner.sh "$IMAGE"
