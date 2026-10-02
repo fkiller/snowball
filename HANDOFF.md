@@ -1,6 +1,125 @@
 # Public release preparation handoff
 
-**Handoff state: IN PROGRESS** — 2026-10-02 America/New_York.
+**Handoff state: READY** — 2026-10-02 America/New_York.
+
+## Mandatory takeover: CURRENT source of truth
+
+CodexBar reported 93% used / 7% remaining in the primary 5-hour window at
+2026-10-02 05:26:47 UTC. Mandatory quota guard reached; no further implementation.
+The sections below this CURRENT section are historical context. Do not follow
+their older next actions when they conflict with this section.
+
+User explicitly authorized publishing BOTH products through functioning CI/CD,
+complete buy/tools/build/flash/install/run guides, and public artwork. No new
+approval is needed for publication. Production restart/deployment/migration,
+physical flash and eFuse changes remain unauthorized.
+
+Repository is PUBLIC; approved banner and icon render in the visitor README.
+All six required checks, admin enforcement, no force-push/deletion, secret
+scanning/push protection, private reporting and Dependabot updates are enabled.
+Actions default read-only. No open secret/Dependabot alerts were found.
+
+The coordinated `v0.4.0-alpha.1` release is STILL A DRAFT, NOT PUBLICLY PUBLISHED.
+It has 31 uploaded assets, 5,959,749,839 bytes. Immutable tag/source commit:
+`9b260cc16d3999890ad12a1450dc5ca61a23fcf6`. DO NOT move/recreate this tag.
+Source, SDK/vendor notices, corresponding image source, SBOMs, all platform
+bundles and both prebuilt image archives are complete and already uploaded.
+
+### Exact next action
+
+In `.github/workflows/finish-release.yml`, remove ONLY the redundant command
+`gh release view "$TAG" --json isDraft | jq -e '.isDraft == true'` from the
+**validate** job. Its read-only token cannot see drafts (draft visibility
+requires push access). Keep validation read-only and preserve every other
+tag/commit/run/job check. Keep the SAME draft check in the **publish** job,
+which already has contents-write and checks before any mutation. Granting
+validation contents-write is an alternative, but removing the redundant check
+preserves the narrower permission boundary.
+
+Create a branch from current `origin/main`, apply the minimal fix, actionlint,
+PR, six required checks, merge, then run:
+
+```powershell
+gh workflow run finish-release.yml --ref main -f tag=v0.4.0-alpha.1 -f source_run=36967114243
+```
+
+Wait for actual publication and anonymous hash verification to pass. Do not
+publish manually or bypass gates. Do not repeat all builds: the recovery workflow
+requires the original tag SHA and ten successful build/security/package jobs,
+downloads those exact artifacts, recomputes manifest, verifies every draft
+download, publishes, then anonymously verifies every download.
+
+### Completed work, tests and failed approaches
+
+- PR #10 merged full publication pipeline after six checks passed:
+  https://github.com/fkiller/snowball/actions/runs/36966649736
+- Original release run 36967114243: all ten validate/security/build/package
+  jobs PASS; only publisher FAILED because tag API returns HTTP 404 for drafts.
+  All 31 assets uploaded before failure. Native ARM64/AMD64 image scans/QA,
+  Docker save/load image-ID roundtrips, exact corresponding source collection,
+  locked IDF build with SDK/component notices and every platform bundle passed.
+  https://github.com/fkiller/snowball/actions/runs/36967114243
+- PR #11 merged fixed authenticated list fallback in the verifier, recovery
+  workflow, release plan/readiness/settings documentation. Six checks PASS:
+  https://github.com/fkiller/snowball/actions/runs/36968500072
+- Recovery run 36968844009 FAILED at validate's read-only draft lookup; source
+  SHA/run name/completed status/all-job checks returned true first. Publisher
+  skipped; no assets changed. This isolates the next fix above.
+  https://github.com/fkiller/snowball/actions/runs/36968844009
+- Local FIXED verifier downloaded ALL 30 assets (~5.96 GB): every size/hash PASS.
+  Temporary GH_TOKEN came from gh auth only in process environment, never printed
+  or committed; removed afterward. SDK-notice collector retained 128 entries.
+- Local actionlint 1.7.12 clean, docs links pass 28 Markdown files, npm audit
+  zero findings, lint/build/tests 17 pass/3 Windows POSIX skips. CI executes
+  Linux migration/flash guard tests and Go race/vet/govulncheck, Gitleaks, IDF.
+- Firmware archive: 3,807,540 bytes, four non-NVS ranges only; never flashed.
+- Manual physical speech/acoustic/ghost-wake/barge-in, Windows/macOS VM
+  onboarding, real migration/reboot and production security remain unexecuted.
+  Preserve those alpha limitations; do not infer a physical pass from CI.
+
+### Architecture, files and distribution constraints
+
+One alpha tag covers both products. Linux ARM64/AMD64 use downloadable prebuilt
+Docker archives; Windows/macOS bundles use SSH to a LAN Linux VM/host. No GHCR
+visibility dependency. Runtime container/volume `/data`, `snowball-voice`,
+`snowball_speaker.bin` and protocol 1 stay compatible.
+
+`release.yml` builds the exact tag; `finish-release.yml` reuses verified builds.
+`verify-release-downloads.mjs` contains the fixed draft list lookup.
+`prepare-release-manifest.mjs` requires five product/platform bundles, two
+images, corresponding sources and three SBOMs, and bounds asset sizes.
+`collect-image-sources.py` retains exact authenticated Debian source descriptors,
+upstream/build scripts, Node/noVNC sources, copyright and common-license texts;
+missing sources fail. `package-image-release.sh` adds project/Go source,
+save/load check and split parts below 1.8 GB. Node/noVNC hashes are checked.
+`collect-idf-notices.py` and `package-firmware-release.mjs` include actual SDK
+and managed-component notices. Own code MIT does not relicense vendor binaries;
+esp-sr/esp_peer/models retain ESP-only terms. Target is Waveshare ESP32-S3-AUDIO
+Board with 16 MB flash/8 MB PSRAM. Keep source with redistributed images.
+
+### Git state, commands and final follow-up
+
+Current branch `codex/release-evidence`; implementation HEAD `e2ad9ba`.
+Remote main is merge `9dcfd95`; tag remains `9b260cc`. No stash. This handoff
+is the only extra change and will be committed/pushed to the current branch.
+PR #11 is already merged; use a new branch/PR for the minimal recovery fix.
+Main is protected; do not push directly. Ignored local artifacts remain safe.
+
+```powershell
+& ./artifacts/actionlint/actionlint.exe -shellcheck '' -pyflakes ''
+node tools/check-doc-links.mjs
+gh pr checks PR_NUMBER
+gh run view RUN_ID --log-failed
+gh release view v0.4.0-alpha.1 --json isDraft,isPrerelease,assets,url
+# After PUBLIC publication, no token needed:
+node tools/verify-release-downloads.mjs fkiller/snowball v0.4.0-alpha.1 9b260cc16d3999890ad12a1450dc5ca61a23fcf6
+```
+
+After the fix and successful CI publication, update RELEASE_READINESS.md and
+HANDOFF.md with the successful recovery-run link and public release URL; inspect
+the visitor Release page and report honestly in Korean. No production operation
+occurred. Preserve router independent dirty work at b702a4c, its snapshot in
+ignored artifacts/router-prep-snapshot, and all existing credentials/state.
 
 ## Active publication task (2026-10-02)
 
