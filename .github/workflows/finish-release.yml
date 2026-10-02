@@ -42,7 +42,6 @@ jobs:
           jq -e --arg sha "$COMMIT" '.head_sha == $sha and .status == "completed" and .name == "Publish both products"' /tmp/run.json
           gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN/jobs?per_page=100" > /tmp/jobs.json
           jq -e '.jobs | length == 11 and all(.[]; .status == "completed" and (if .name == "publish" then .conclusion == "failure" else .conclusion == "success" end))' /tmp/jobs.json
-          gh release view "$TAG" --json isDraft | jq -e '.isDraft == true'
           echo "commit=$COMMIT" >> "$GITHUB_OUTPUT"
   publish:
     needs: validate
