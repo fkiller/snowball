@@ -24,6 +24,15 @@ ChatGPT web Voice session.
 | Snowball-Voice | Waveshare ESP32-S3-AUDIO-Board, 16 MB flash / 8 MB PSRAM | `0.4.0-alpha.1` |
 | Device protocol | Pinned HTTPS + PCMA DTLS-SRTP | `1` |
 
+<p align="center">
+  <img src="docs/images/hardware/waveshare-esp32-s3-audio.jpg" width="300" alt="Waveshare ESP32-S3-AUDIO-Board">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="docs/images/hardware/snowball-hardware-live.gif" width="265" alt="Snowball-Voice hardware in operation">
+</p>
+<p align="center">
+  <em>Left: Supported board (<a href="https://www.waveshare.com/esp32-s3-audio-board.htm">Waveshare ESP32-S3-AUDIO-Board</a>) · Right: Live hardware in operation (<a href="https://x.com/fkiller/status/2088063549369102555">Watch video demo on X</a>)</em>
+</p>
+
 Check [Releases](https://github.com/fkiller/snowball/releases) for actually
 published tags/assets. CI publishes both products with verified downloads,
 Linux image archives, source, licenses, and SBOMs. Existing identifiers stay `snowball-voice`, `/data`, and
