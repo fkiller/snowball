@@ -40,11 +40,12 @@ were not requested and must not occur during source preparation.
   pass after fixing vulnerable Go 1.26.5 and x/crypto 0.53.0 (now 0.55.0).
 - Linux CI IDF 5.5.5 firmware build, ARM64/AMD64 image build, Trivy gate,
   authenticated media start/stop smoke, and image SBOM generation pass.
-  Screenshot artifact export required a host-group/setgid fix; final all-job
-  rerun must be green before merging. No failing gate is bypassed.
+  Screenshot artifact export required a host-group/setgid fix. All six jobs now
+  pass on 4d0fe77 in run 36963388762, including screenshots and both image SBOMs.
+  No failing gate is bypassed; the documentation confirmation has its own CI.
 - ESP32 plus four Gateway platform bundles and checksums were generated from
   clean commits, most recently eda00d9, in ignored artifacts/releases-eda00d9/.
-  Image SBOMs are in artifacts/ci-eda00d9/. No binary/tag/image publication.
+  Final image SBOMs/screenshots are in artifacts/ci-final/. No binary/tag/image publication.
 - Dependabot vulnerability alerts enabled and GitHub description/topics updated.
   Repository remains private. Branch protection API returns 403 requiring Pro
   or public visibility; private vulnerability reporting is not available yet.
@@ -52,10 +53,12 @@ were not requested and must not occur during source preparation.
 ## Exact next action and remaining work
 
 Read docs/RELEASE_READINESS.md and inspect PR #1 checks:
-https://github.com/fkiller/snowball/pull/1 . Finish the screenshot-group fix's
-all-job rerun, then merge the prepared source into main only with all six checks
-green. Source preparation does not itself change private visibility. At the
-source-publication milestone apply the documented security/protection settings.
+https://github.com/fkiller/snowball/pull/1 . Source preparation is complete;
+confirm the PR is merged into main after its final documentation CI is green.
+If it is already merged, do not redo preparation. The next product milestone
+is the manual/binary checklist in docs/RELEASE_READINESS.md. Source preparation
+does not itself change private visibility. At the source-publication milestone
+apply the documented security/protection settings.
 Tag/binary publication stays separate until binary/license/manual gates pass.
 Repackage from the final coordinated tag before publishing reviewed artifacts.
 Do not advertise a registry image or successful physical cases that do not exist.
@@ -76,8 +79,8 @@ snowball-voice:0.3.10-full-duplex, healthy at inspection.
 Use CONTRIBUTING.md for required checks, docs/GETTING_STARTED.md for firmware,
 docs/PLATFORMS.md for platform installation, and docs/RELEASE_PLAN.md for release
 packaging. Final results belong in docs/RELEASE_READINESS.md. Gitleaks 8.30.1
-baseline full-history scan of 35 commits and later 39-commit scan found no secrets;
-tracked-source 1.02 MB scan passes. Final CI scans all history; repeat for the tag.
+baseline full-history scan of 35 commits and final 41-commit scan found no secrets;
+tracked-source 1.03 MB scan passes. Final CI scans all history; repeat for the tag.
 Native Windows full Gateway tests still have POSIX-permission and /tmp failures;
 Linux race results are authoritative.
 
@@ -91,8 +94,9 @@ signed OTA/anti-rollback are incomplete. Normal flashing never writes NVS 0x9000
 Work branch: codex/public-release-prep, PR #1 to main. Major preparation commits:
 8675ab3 (guides/license/branding/tools), 63cc3a3 (Go security + CI toolchain),
 9611909/c09aa8e/eda00d9 (isolated QA host/home/artifact access and binary notices).
-The subsequent verification/group-access commit completes this preparation
-record. Inspect actual git status/log and PR state before continuing. Runtime/
+4d0fe77 fixes private screenshot group access; all six checks pass. The subsequent
+documentation confirmation records the final evidence. Inspect actual git
+status/log and PR state before continuing. Runtime/
 build artifacts and original artwork are ignored. No stash was created.
 Root README links all user guides; tools/package-*-release.mjs
 and .github/workflows/prepare-release.yml prepare review artifacts without
