@@ -58,7 +58,7 @@ The normal Docker restart policy handles service recovery; an approved OS
 reboot acceptance test remains part of host onboarding.
 
 Existing installations use upgrade/rollback, never fresh-install commands.
-To run host development checks install Node 22 and Go 1.26.5+; see CONTRIBUTING.
+To run host development checks install Node 22 and Go 1.26.8+; see CONTRIBUTING.
 
 ## Windows x64 and ARM64
 

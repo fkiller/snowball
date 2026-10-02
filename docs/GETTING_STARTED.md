@@ -59,7 +59,7 @@ If Docker reports permission denied, use the administrator's supported Docker
 access method. Membership of the Docker group grants host-level authority.
 
 For Windows contributors install [Git for Windows](https://git-scm.com/downloads/win),
-[Node.js 22 LTS](https://nodejs.org/en/download), and [Go 1.26.5 or newer](https://go.dev/dl/).
+[Node.js 22 LTS](https://nodejs.org/en/download), and [Go 1.26.8 or newer](https://go.dev/dl/).
 Docker Desktop with the Linux engine/WSL2 can build images, but Windows Docker
 Desktop runtime networking is not the accepted Gateway deployment path. Run
 the Gateway on the Linux host and use Windows for compilation/USB setup.
@@ -312,7 +312,7 @@ personal state or factory backup with a release.
 
 ## Contributor verification
 
-Install native Node 22 and Go 1.26.5+ only if running host checks. From the root:
+Install native Node 22 and Go 1.26.8+ only if running host checks. From the root:
 
 ```sh
 npm ci --ignore-scripts
