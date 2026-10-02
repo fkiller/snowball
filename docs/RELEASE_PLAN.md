@@ -1,10 +1,10 @@
 # Release plan
 
-## Prepared first public release
+## First public alpha
 
 Target: **v0.4.0-alpha.1**, a developer preview of Snowball-Voice-Gate and
-Snowball-Voice from the same commit. This is a prepared version, not a claim
-that an image, tag, or release already exists. Protocol version remains **1**;
+Snowball-Voice from the same commit. The tag-triggered CI pipeline publishes all product/platform assets together;
+see the actual Releases page and workflow run for publication status. Protocol version remains **1**;
 existing `snowball-voice` container, volume, NVS, and state identifiers remain.
 
 Use one repository and one coordinated tag initially. The application/PWA
@@ -57,11 +57,9 @@ preview does not promise production-trusted devices or unrestricted MIT binaries
 
 ## Repository publication settings
 
-The current repository remains private during preparation. After selecting
-the source-preview publication milestone, enable private vulnerability
-reporting under **Settings → Code security**, secret scanning/push protection
-when available, and protect `main` with a pull-request rule requiring these
-checks:
+The repository is public. Private vulnerability reporting, secret scanning,
+push protection, Dependabot alerts/security updates are enabled. `main`
+requires an up-to-date PR and these six checks, including for administrators:
 
 - Full-history secret scan
 - Web build, lint, and audit
@@ -70,15 +68,10 @@ checks:
 - ARM64 container build, scan, and isolated smoke
 - AMD64 container build, scan, and isolated smoke
 
-Disable force pushes/deletion for `main`; require an up-to-date branch and
-keep the action permissions read-only. Set reviewer requirements according
-to the actual maintainer team. Dependabot vulnerability alerts were enabled
-during preparation. GitHub rejected branch-protection access for the current
-private repository with `Upgrade to GitHub Pro or make this repository public`;
-apply protection when that feature becomes available, rather than claiming
-the rule is already active. Verify the private reporting button before opening
-the repository to users. Source publication, binary publication, and deployment
-are three separate operations.
+Force pushes and branch deletion are disabled. Actions default to read-only;
+only the final release publisher gets contents-write permission. No mandatory
+reviewer approval is configured for this single-maintainer repository. Release
+publication never deploys or flashes devices.
 
 ## Firmware archive
 

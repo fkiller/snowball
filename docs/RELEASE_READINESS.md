@@ -60,14 +60,40 @@ candidate build client. Native ARM64/AMD64 GitHub builds are the successful imag
 evidence. Production stayed healthy with its unchanged 2026-09-14 start time;
 the router worktree, daemon, credentials, and ESP32 were not changed.
 
-## Remaining manual/binary gates
+## Coordinated publication verification (2026-10-02)
+
+Publication PR [#10](https://github.com/fkiller/snowball/pull/10) merged after
+[all six required checks passed](https://github.com/fkiller/snowball/actions/runs/36966649736).
+The immutable alpha tag points to `9b260cc16d3999890ad12a1450dc5ca61a23fcf6`.
+[Actual two-product publication pipeline](https://github.com/fkiller/snowball/actions/runs/36967114243)
+rebuilds, scans and smoke-tests the shipped ARM64/AMD64 images, collects exact
+corresponding source/notices, compiles locked firmware with SDK/component
+notices, and packages all four Gateway platforms. Native image save/load
+roundtrips passed. Final status is recorded in the workflow and Release page.
+
+The repository is now public. Strict required-check main protection, secret
+scanning/push protection, private vulnerability reporting and Dependabot updates
+are enabled. Actions default permissions are read-only. No open secret or
+Dependabot alerts were present at the publication setting check.
+
+The approved banner and icon both render in GitHub's visitor README. Original
+OpenAI-logo assets remain ignored. Local actionlint 1.7.12 validates all workflows;
+web build/tests pass 17 cases with three Windows POSIX skips, npm audit has zero
+findings, and documentation links pass across 28 Markdown files.
+
+ESP-IDF 5.5.5/esp-sr 2.4.7/esp_peer 1.2.7 terms and bundled model/component
+notices were reviewed for this ESP32-S3-only development firmware distribution.
+ESP-only restrictions remain in the firmware archive and THIRD_PARTY_NOTICES;
+project MIT does not relicense vendor binaries. Each Gateway architecture
+includes exact authenticated Debian source packages/build scripts, Node/noVNC
+source, project/Go source, copyright/common license files and SBOMs.
+
+## Remaining manual and production gates
 
 - Three spoken wake/converse/end cycles, no ghost wake, acoustic barge-in,
   physical long-session confidence. Prior 10m30s evidence belongs to its
   recorded build; it is not fresh acceptance of this prerelease.
 - Windows/macOS VM setup acceptance and optional real daemon migration/reboot.
-- Speech model binary/license review, image source-offer/license review, final
-  digest and SBOM review before public binary/image release.
 - Production security: AEC disabled, plaintext development NVS, incomplete
   Secure Boot/flash encryption/signed OTA/anti-rollback.
 

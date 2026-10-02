@@ -13,9 +13,45 @@ platforms, collects exact corresponding source and notices, uploads a draft,
 verifies all download hashes, and publishes the coordinated alpha.
 Existing physical/VM acceptance limitations remain explicit. No production
 restart, daemon migration, physical flashing or eFuse changes are authorized.
-Next: pass the publication PR security gate, merge, make the source public,
-configure protection/reporting, push `v0.4.0-alpha.1`, observe/fix the actual
-release run, then anonymously verify every release asset and repository art.
+Publication PR #10 merged after all six required jobs passed:
+https://github.com/fkiller/snowball/actions/runs/36966649736
+Main/tag commit: `9b260cc16d3999890ad12a1450dc5ca61a23fcf6`.
+Annotated `v0.4.0-alpha.1` has been pushed; actual publish workflow is running:
+https://github.com/fkiller/snowball/actions/runs/36967114243
+The repository is now PUBLIC (authorized by the user), main has strict six-check
+protection including admins, force-push/delete disabled, private vulnerability
+reporting enabled, secret scanning/push protection enabled, Dependabot alerts
+and security updates enabled, Actions default token read-only. No secret or
+open Dependabot alerts were present when checked.
+
+Exact next action: inspect run 36967114243 using `gh run view`; do not duplicate
+or replace the tag. If a job fails, fix with a PR, preserve immutable tagged
+source, and decide whether the un-published alpha tag must be replaced ONLY if
+no release was published (prefer a new alpha version if tag changes required).
+Draft retries use `gh workflow run release.yml -f tag=v0.4.0-alpha.1`.
+Verify every download with:
+`node tools/verify-release-downloads.mjs fkiller/snowball v0.4.0-alpha.1 9b260cc16d3999890ad12a1450dc5ca61a23fcf6`.
+The script needs no token after PUBLIC publication; do not expose gh tokens.
+Finish docs/readiness and handoff with actual publication evidence and link.
+
+New scripts: collect-image-sources.py runs only in a disposable image as root,
+uses exact authenticated APT source versions (missing versions fail), retains
+Node/noVNC source and copyright/common-license texts. package-image-release.sh
+adds project/Go source, saves and load-checks the image, splits source over 1.8GB.
+collect-idf-notices.py/package-firmware-release.mjs retain actual SDK and managed
+component notices, enforce four non-NVS ranges and matching locked IDF/version.
+prepare-release-manifest.mjs requires all five product/platform bundles, two
+image archives, corresponding sources and three SBOMs. Publisher uploads only
+a draft, verifies size/hash of every asset, publishes then verifies anonymously.
+Published releases cannot be overwritten by retries.
+
+Local validation on 21f4318: actionlint 1.7.12 clean; npm ci/audit zero findings;
+lint and web build/test 17 pass/3 Windows POSIX skips; docs links pass 28 files;
+firmware archive with SDK+managed notices built 3,793,052 bytes (no flash); exact
+IDF notice collector retained 128 entries; npm notice collector succeeded.
+Public GitHub visitor UI verified banner and icon both render correctly.
+CI PR #10 verified both native container builds/scans/QA, full-history secrets,
+Linux Go race/vet/vulnerability checks, web checks and locked IDF build.
 
 ## Earlier preparation objective and task
 
