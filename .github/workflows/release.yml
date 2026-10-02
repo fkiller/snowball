@@ -1,0 +1,157 @@
+name: Publish both products
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing coordinated alpha tag (draft retries only)
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      commit: ${{ steps.version.outputs.commit }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+          fetch-depth: 0
+      - id: version
+        env:
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-alpha\.[0-9]+$ ]]
+          test "$TAG" = "v$(node -p "require('./package.json').version")"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "$TAG^{commit}")"
+          git merge-base --is-ancestor HEAD origin/main
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+  security:
+    needs: validate
+    uses: ./.github/workflows/security-gate.yml
+    with:
+      ref: ${{ needs.validate.outputs.commit }}
+  images:
+    needs: [validate, security]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+          - arch: amd64
+            runner: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22.23.0
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: 1.26.8
+      - name: Build exact release image
+        id: image
+        run: |
+          IMAGE="snowball-voice:$(node -p "require('./package.json').version")"
+          docker build --network host -t "$IMAGE" .
+          echo "name=$IMAGE" >> "$GITHUB_OUTPUT"
+      - name: Scan the actual downloadable image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.name }}
+          version: v0.70.0
+          exit-code: '1'
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          scanners: vuln,secret,misconfig
+      - name: Test isolated authentication and media lifecycle
+        run: SNOWBALL_QA_IMAGE="snowball-voice:$(node -p "require('./package.json').version")" ./tools/run-qa-browser-smoke.sh
+      - name: Save loadable image and complete corresponding source
+        run: bash tools/package-image-release.sh '${{ matrix.arch }}'
+      - name: Image SBOM
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.70.0 image --format cyclonedx --output /dev/stdout "snowball-voice:$(node -p "require('./package.json').version")" > artifacts/releases/image-${{ matrix.arch }}-sbom.cdx.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-image-${{ matrix.arch }}
+          path: artifacts/releases/*
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+  packages:
+    needs: [validate, security]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22.23.0
+      - name: Build locked firmware and collect actual SDK notices
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo/firmware/esp32-s3-audio espressif/idf:v5.5.5 bash -lc 'source /opt/esp/idf/export.sh && idf.py -D SDKCONFIG=$PWD/build-release/sdkconfig -D SDKCONFIG_DEFAULTS=$PWD/sdkconfig.defaults -B build-release build && python /repo/tools/collect-idf-notices.py /opt/esp/idf build-release/idf-notices'
+      - name: Package firmware and every Gateway platform
+        env:
+          SNOWBALL_IDF_NOTICE_DIR: firmware/esp32-s3-audio/build-release/idf-notices
+        run: |
+          node tools/package-firmware-release.mjs
+          node tools/package-gate-release.mjs
+          npm ci --ignore-scripts
+          npm sbom --sbom-format cyclonedx --omit=dev > artifacts/releases/npm-runtime-sbom.cdx.json
+          npm sbom --sbom-format cyclonedx > artifacts/releases/npm-build-sbom.cdx.json
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-platform-packages
+          path: |
+            artifacts/releases/*.tar.gz
+            artifacts/releases/*.zip
+            artifacts/releases/*.sha256
+            artifacts/releases/*.cdx.json
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    needs: [validate, images, packages]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        with:
+          node-version: 22.23.0
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: artifacts/releases
+      - name: Validate complete two-product asset manifest
+        run: node tools/prepare-release-manifest.mjs
+      - name: Upload draft, verify every download, then publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.validate.outputs.tag }}
+          COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          if gh release view "$TAG" --json isDraft > /tmp/existing-release.json 2>/dev/null; then
+            test "$(jq -r .isDraft /tmp/existing-release.json)" = true
+          else
+            gh release create "$TAG" --verify-tag --target "$COMMIT" --draft --prerelease --title "Snowball-Voice & Snowball-Voice-Gate $TAG" --notes-file docs/RELEASE_NOTES.md
+          fi
+          gh release upload "$TAG" artifacts/releases/* --clobber
+          node tools/verify-release-downloads.mjs "$GITHUB_REPOSITORY" "$TAG" "$COMMIT"
+          gh release edit "$TAG" --draft=false --prerelease --latest=false
+          env -u GH_TOKEN node tools/verify-release-downloads.mjs "$GITHUB_REPOSITORY" "$TAG" "$COMMIT"

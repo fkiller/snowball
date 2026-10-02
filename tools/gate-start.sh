@@ -6,6 +6,10 @@ ACTION=${1:-status}
 command -v docker >/dev/null 2>&1 || { printf 'Install Docker Engine and Compose first.\n' >&2; exit 1; }
 docker info >/dev/null
 case "$ACTION" in
+    download)
+        [ "$(uname -s)" = Linux ] || { printf 'Run inside the Linux VM/host.\n' >&2; exit 1; }
+        bash tools/download-gate-image.sh
+        ;;
     build)
         docker build --network host -t snowball-voice:0.4.0-alpha.1 .
         ;;
@@ -33,5 +37,5 @@ case "$ACTION" in
     status)
         docker ps --filter name='^snowball-voice$' --format '{{.Names}} {{.Image}} {{.Status}}'
         ;;
-    *) printf 'Usage: tools/gate-start.sh build|install|status\n' >&2; exit 2 ;;
+    *) printf 'Usage: tools/gate-start.sh download|build|install|status\n' >&2; exit 2 ;;
 esac

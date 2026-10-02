@@ -1,6 +1,9 @@
-# Snowball-Voice · Snowball-Voice-Gate
-
 ![Snowball mascot with headset and original waveform](public/branding/banner.png)
+
+<p align="center"><img src="public/branding/icon.png" width="112" alt="Snowball voice mascot"></p>
+<h1 align="center">Snowball-Voice · Snowball-Voice-Gate</h1>
+<p align="center">A little speaker. A voice companion. Your own LAN Gateway.</p>
+<p align="center"><a href="https://github.com/fkiller/snowball/releases/tag/v0.4.0-alpha.1">Download both products</a> · <a href="docs/GETTING_STARTED.md">Buy &amp; build</a> · <a href="docs/PLATFORMS.md">Install your platform</a> · <a href="docs/GETTING_STARTED.md#6-flash-without-erasing-identity">Flash &amp; pair</a></p>
 
 **Snowball-Voice** is the ESP32-S3 speaker client. **Snowball-Voice-Gate** is
 the LAN-only Gateway, Web Client, and recovery console for a persistent
@@ -15,15 +18,15 @@ ChatGPT web Voice session.
 [Buy, install tools, compile, flash, pair, and run](docs/GETTING_STARTED.md).
 [Gateway platform-specific releases and setup](docs/PLATFORMS.md).
 
-| Product | Role | Prepared version |
+| Product | Role | Alpha version |
 | --- | --- | --- |
 | Snowball-Voice-Gate | Linux ARM64/AMD64 container; Windows/macOS use a LAN-connected Linux VM/host | `0.4.0-alpha.1` |
 | Snowball-Voice | Waveshare ESP32-S3-AUDIO-Board, 16 MB flash / 8 MB PSRAM | `0.4.0-alpha.1` |
 | Device protocol | Pinned HTTPS + PCMA DTLS-SRTP | `1` |
 
 Check [Releases](https://github.com/fkiller/snowball/releases) for actually
-published tags/assets. A prepared source version is not a downloadable-image
-claim. Existing identifiers stay `snowball-voice`, `/data`, and
+published tags/assets. CI publishes both products with verified downloads,
+Linux image archives, source, licenses, and SBOMs. Existing identifiers stay `snowball-voice`, `/data`, and
 `snowball_speaker.bin` so upgrades preserve credentials.
 
 ## What works
@@ -48,9 +51,10 @@ assigned to the Linux host, then:
 ```sh
 git clone https://github.com/fkiller/snowball.git
 cd snowball
-docker build --network host -t snowball-voice:0.4.0-alpha.1 .
-docker compose up -d
-docker compose ps
+git checkout v0.4.0-alpha.1
+sh tools/gate-start.sh download
+SNOWBALL_LAN_IP=192.168.1.20 sh tools/gate-start.sh install
+sh tools/gate-start.sh status
 ```
 
 Continue with [HTTPS and administrator/ChatGPT setup](docs/GETTING_STARTED.md#4-set-up-https-and-sign-in).

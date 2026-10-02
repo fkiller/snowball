@@ -27,8 +27,10 @@ jobs:
           test "$RELEASE_TAG" = "v$(node -p "require('./package.json').version")"
           test "$(git rev-parse HEAD)" = "$(git rev-parse "$RELEASE_TAG^{commit}")"
       - name: Build locked ESP32-S3 firmware
-        run: docker run --rm -v "$PWD/firmware/esp32-s3-audio:/project" -w /project espressif/idf:v5.5.5 bash -lc 'source /opt/esp/idf/export.sh && idf.py -D SDKCONFIG=/project/build-release/sdkconfig -D SDKCONFIG_DEFAULTS=/project/sdkconfig.defaults -B build-release build'
+        run: docker run --rm -v "$PWD:/repo" -w /repo/firmware/esp32-s3-audio espressif/idf:v5.5.5 bash -lc 'source /opt/esp/idf/export.sh && idf.py -D SDKCONFIG=$PWD/build-release/sdkconfig -D SDKCONFIG_DEFAULTS=$PWD/sdkconfig.defaults -B build-release build && python /repo/tools/collect-idf-notices.py /opt/esp/idf build-release/idf-notices'
       - name: Package approved firmware and all Gateway platforms
+        env:
+          SNOWBALL_IDF_NOTICE_DIR: firmware/esp32-s3-audio/build-release/idf-notices
         run: |
           node tools/package-firmware-release.mjs
           node tools/package-gate-release.mjs
