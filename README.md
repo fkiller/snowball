@@ -3,7 +3,7 @@
 <p align="center"><img src="public/branding/icon.png" width="112" alt="Snowball voice mascot"></p>
 <h1 align="center">Snowball-Voice · Snowball-Voice-Gate</h1>
 <p align="center">A little speaker. A voice companion. Your own LAN Gateway.</p>
-<p align="center"><a href="https://github.com/fkiller/snowball/releases/tag/v0.4.0-alpha.1">Download both products</a> · <a href="docs/GETTING_STARTED.md">Buy &amp; build</a> · <a href="docs/PLATFORMS.md">Install your platform</a> · <a href="docs/GETTING_STARTED.md#6-flash-without-erasing-identity">Flash &amp; pair</a></p>
+<p align="center"><a href="https://github.com/fkiller/snowball/releases/tag/v0.4.0-alpha.1">Download both products</a> · <a href="#web-ui">Web UI</a> · <a href="docs/GETTING_STARTED.md">Buy &amp; build</a> · <a href="docs/PLATFORMS.md">Install your platform</a> · <a href="docs/GETTING_STARTED.md#6-flash-without-erasing-identity">Flash &amp; pair</a></p>
 
 **Snowball-Voice** is the ESP32-S3 speaker client. **Snowball-Voice-Gate** is
 the LAN-only Gateway, Web Client, and recovery console for a persistent
@@ -12,6 +12,31 @@ ChatGPT web Voice session.
 > Experimental developer preview. This unofficial project drives ChatGPT's
 > web interface, not a stable API. It is not affiliated with or endorsed by
 > OpenAI. Upstream UI/account restrictions can require maintenance.
+
+## Web UI
+
+Snowball-Voice-Gate includes a browser **Voice Web Client** and **Admin** screen.
+The Web Client lets you start/stop Voice, open the protected ChatGPT Browser
+Console, and view connection/recovery status. Admin provides device pairing,
+Gateway status and settings. You can use the Web Client before buying an ESP32.
+
+![Snowball-Voice-Gate Web Client ready screen](docs/images/web-ui/voice-ready.png)
+
+<details>
+<summary>See the active Voice screen</summary>
+
+![Snowball-Voice-Gate Web Client active screen](docs/images/web-ui/voice-active.png)
+
+</details>
+
+These are captures of the actual application from isolated synthetic QA, with
+test status/address values; they are not a recording of a live ChatGPT call.
+
+After installing the Gateway and trusting its HTTPS certificate, open
+`https://YOUR_GATEWAY_LAN_IP:8443/` for Voice or `/admin` for administration.
+The UI runs on your LAN Gateway; this GitHub page provides screenshots and
+source. [Web UI tour and access guide](docs/WEB_UI.md) ·
+[HTTPS, administrator setup and ChatGPT login](docs/GETTING_STARTED.md#4-set-up-https-and-sign-in).
 
 ## Start here
 
@@ -97,6 +122,7 @@ USB setup requires desktop Chrome/Edge; phones can use the Web Client.
 | --- | --- |
 | [Getting started](docs/GETTING_STARTED.md) | Purchase → tools → compile → flash → pair → run |
 | [Platforms](docs/PLATFORMS.md) | Linux ARM64/AMD64, Windows, macOS, OpenWrt packages/setup |
+| [Web UI](docs/WEB_UI.md) | Screen previews, Voice Web Client, Admin and how to open them |
 | [Architecture](ARCHITECTURE.md) | Components, media, persistence, trust boundaries |
 | [Firmware](firmware/esp32-s3-audio/README.md) | ESP32 implementation and USB protocol |
 | [Pairing acceptance](docs/PAIRING_ACCEPTANCE.md) | Board, registry, proof, runtime gates |
