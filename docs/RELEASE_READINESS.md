@@ -26,7 +26,9 @@ Final code verification: `4d0fe77`, [passing six-job CI run](https://github.com/
 Both architecture jobs retain private synthetic screenshots and image SBOMs.
 The canonical source update is tracked in [PR #1](https://github.com/fkiller/snowball/pull/1).
 The subsequent documentation confirmation changes no runtime code; its own
-CI result is linked from the PR. Merge requires all six checks to pass.
+CI result is linked from the PR. A final display-name consistency change defaults
+new USB enrollment to Snowball-Voice without renaming existing devices. Its
+verification is also on the PR; merge requires all six checks to pass.
 
 | Check | Result |
 | --- | --- |

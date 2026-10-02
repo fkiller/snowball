@@ -157,7 +157,7 @@ export function DevicePairing() {
   const [busy, setBusy] = useState(false);
   const [hello, setHello] = useState<DeviceHello | null>(null);
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus | null>(null);
-  const [deviceName, setDeviceName] = useState("Snowball Speaker");
+  const [deviceName, setDeviceName] = useState("Snowball-Voice");
   const [ssid, setSSID] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("Connect the Waveshare board to this computer with USB-C.");
@@ -357,7 +357,7 @@ export function DevicePairing() {
       readLoopRef.current = readLoop(reader);
       const identity = responseResult<unknown>(await sendOperation("hello"));
       if (!isDeviceHello(identity)) {
-        throw new Error("This is not a supported Snowball speaker firmware.");
+        throw new Error("This device is not running supported Snowball-Voice firmware.");
       }
       setHello(identity);
       await refreshDeviceStatus();

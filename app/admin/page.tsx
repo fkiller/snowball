@@ -3,7 +3,7 @@ import { AdminApp } from "./admin-app";
 
 export const metadata: Metadata = {
   title: "Admin · Snowball-Voice-Gate",
-  description: "Snowball gateway settings and security controls.",
+  description: "Snowball-Voice-Gate settings and security controls.",
 };
 
 export default function AdminPage() {

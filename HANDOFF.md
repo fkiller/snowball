@@ -22,6 +22,8 @@ were not requested and must not occur during source preparation.
   contribution/reporting templates, release plan, readiness record added.
 - Public logo-free banner/icon and PWA branding added; original root images
   remain locally ignored.
+- New USB enrollment defaults to the Snowball-Voice display name; existing
+  user-assigned device names and protocol identifiers are preserved.
 - Windows/macOS launchers control a LAN Linux VM/host; Linux ARM64/AMD64 image
   jobs and platform packaging are provided. Native desktop Docker cannot bind
   the desktop's LAN interface as required; do not claim its acceptance.
