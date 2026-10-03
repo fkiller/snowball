@@ -9,8 +9,11 @@ template files, and an understandable public repository layout.
 
 ## Current task and state
 
-Public repository cleanup is being verified on `codex/public-repo-cleanup`,
-based on main `0a8548f` (PR #15). No production deployment, restart, daemon
+Implementation is complete on `codex/public-repo-cleanup`, based on main
+`0a8548f` (PR #15). Cleanup PR #16 is open and attached:
+https://github.com/fkiller/snowball/pull/16
+Main remains unchanged because the full development audit blocks merge.
+No production deployment, restart, daemon
 migration, physical flash or eFuse change is authorized by this cleanup.
 
 ## Completed changes
@@ -50,11 +53,15 @@ runtime audit is clean. Do not use npm audit fix --force, downgrade frameworks,
 disable the audit or bypass protected-main checks. The full audit runs after
 web/migration validation so tests produce evidence, but remains a blocking step.
 
-Push the cleanup PR and inspect all six protected-main CI checks: secret history, web,
-Gateway race/vet/vulnerability, firmware, ARM64 and AMD64 image scan/smoke.
-Inspect the resulting GitHub README visually, then merge the cleanup PR.
-Merge only after the dependency blocker is legitimately resolved and every
-required check passes. Record the final checks and PR here before completion.
+Exact next action: inspect PR #16's latest checks, then resolve the transitive
+development dependency advisory with a verified patch or compatible tool
+change. No upstream patched npm version was available at the last check.
+Rerun all six checks after a dependency fix; merge only when all pass.
+GitHub branch-preview verification passed: banner, inline icon/title, all badges,
+hardware media and the single Web UI image load; no details disclosure remains.
+Initial PR CI confirms lint/build/test, documentation links and Linux migration
+tests pass before the blocking development audit. Secret and Gateway jobs pass.
+Use the live PR checks for the final image/firmware results and latest commit.
 
 The web entry and moved installer references are the material risk to verify.
 Existing migration mocks must still pass on Linux. No local hardware or VM
