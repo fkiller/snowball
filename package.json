@@ -11,8 +11,7 @@
     "start": "vinext start --hostname 127.0.0.1 --port 3000",
     "browser": "node services/browser-controller.mjs",
     "test": "npm run build && node --test tests/*.test.mjs",
-    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
   "dependencies": {
     "playwright": "1.62.0",

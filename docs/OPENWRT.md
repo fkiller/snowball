@@ -4,6 +4,10 @@ Fresh installs follow [getting started](GETTING_STARTED.md). Existing production
 installations retain the `snowball-voice` container, `/data`, Docker socket, and
 state paths. Product display names do not change these identifiers.
 
+Integration files are grouped under `deploy/openwrt/` in current source.
+The immutable `v0.4.0-alpha.1` tag/archives use the original `openwrt/` path;
+use that prefix when running the commands below from those older archives.
+
 ## Optional existing-daemon boot integration
 
 The installer/start helper/procd service were preserved from the router's
@@ -14,7 +18,7 @@ building or cloning this repository.
 After creating and verifying a fresh container on that daemon:
 
 ```sh
-SNOWBALL_DOCKER_HOST=unix:///var/run/docker.sock ./openwrt/install-snowball-voice.sh /root/snowball-voice
+SNOWBALL_DOCKER_HOST=unix:///var/run/docker.sock ./deploy/openwrt/install-snowball-voice.sh /root/snowball-voice
 ```
 
 This installs the helper/service, enables the host Docker boot service, and
@@ -41,7 +45,7 @@ contains credentials and is private; allow space for both image and data archive
 SNOWBALL_MIGRATE_APPROVAL=YES \
 SNOWBALL_OLD_DOCKER_HOST=unix:///var/run/snowball-voice-docker.sock \
 SNOWBALL_DOCKER_HOST=unix:///var/run/docker.sock \
-./openwrt/migrate-to-existing-docker.sh
+./deploy/openwrt/migrate-to-existing-docker.sh
 ```
 
 It never starts both containers on the same production ports. On failure it

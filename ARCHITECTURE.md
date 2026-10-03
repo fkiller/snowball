@@ -8,7 +8,7 @@ Snowball is a single-host, LAN-only gateway between a client browser and a persi
 flowchart LR
     User((User))
     Client["Snowball PWA<br/>iOS / desktop browser"]
-    Router["Home router<br/>Snowball container"]
+    Router["LAN Linux host<br/>Snowball container"]
     ChatGPT["ChatGPT web app"]
     Push["Browser push service"]
 
@@ -26,8 +26,8 @@ There is no inbound WAN service. Snowball listens on one configured private IPv4
 
 ```mermaid
 flowchart TB
-    subgraph Host["ARM64 router host"]
-        Dockerd["Dedicated dockerd<br/>no bridge / NAT / iptables"]
+    subgraph Host["Linux ARM64 / AMD64 host"]
+        Dockerd["Host Docker daemon<br/>optional dedicated OpenWrt daemon"]
 
         subgraph Container["Snowball container · host network · non-root"]
             Nginx["nginx<br/>LAN :8088 / :8443"]
@@ -205,7 +205,7 @@ The headed Chromium process currently requires `--no-sandbox` in this container.
 
 ```mermaid
 flowchart TD
-    Build["Immutable ARM64 image"] --> Start["Container start"]
+    Build["Immutable ARM64 / AMD64 image"] --> Start["Container start"]
     Volume[("Persistent /data volume")] --> Start
     Start --> Certs{"Certificates exist?"}
     Certs -->|No| Generate["Generate local CA + server cert"]
@@ -240,4 +240,10 @@ See [Wake commands and project turn mode](docs/WAKE_COMMANDS.md) and [Client dis
 - `container/start-gst-*.sh` — RTP/audio conversion pipelines
 - `container/nginx.conf.template` — the LAN-only HTTPS edge
 - `container/supervisord.conf` — process lifecycle and recovery
-- `runtime/daemon.json` — isolated Docker daemon behavior
+- `deploy/openwrt/` — optional platform boot/USB/migration integration
+- `runtime/daemon.json` — existing dedicated-daemon configuration path
+
+The Web Client uses vinext's fetch handler, bundled through the existing
+Cloudflare Vite plugin and served locally by `services/web-server.mjs` in Node.
+There is no cloud deployment or D1/R2 database binding. Application settings,
+device registry and credentials are owned by the Go Gateway under `/data`.

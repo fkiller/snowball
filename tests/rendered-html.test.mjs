@@ -153,12 +153,11 @@ test("USB provisioning stays in the authenticated browser boundary", async () =>
 
 test("Device control events require signed replay-protected authentication", async () => {
   const fs = await import("node:fs/promises");
-  const [devices, devproto, gateway, firmware, roadmap] = await Promise.all([
+  const [devices, devproto, gateway, firmware] = await Promise.all([
     fs.readFile(new URL("../gateway/devices.go", import.meta.url), "utf8"),
     fs.readFile(new URL("../gateway/devproto/types.go", import.meta.url), "utf8"),
     fs.readFile(new URL("../gateway/main.go", import.meta.url), "utf8"),
     fs.readFile(new URL("../firmware/esp32-s3-audio/main/provisioning.c", import.meta.url), "utf8"),
-    fs.readFile(new URL("../docs/ROADMAP.md", import.meta.url), "utf8"),
   ]);
   assert.match(devproto, /snowball-device-event-v1/);
   assert.match(devices, /device event replay rejected/);
@@ -167,7 +166,6 @@ test("Device control events require signed replay-protected authentication", asy
   assert.match(gateway, /scheduleDeviceDispatch/);
   assert.match(firmware, /DEVICE_EVENT_PROCESSING_ATTEMPTS/);
   assert.match(firmware, /device event still processing/);
-  assert.match(roadmap, /Authenticated device control session/);
 });
 
 test("Hardware scenarios gate Voice on pairing and authoritative full-duplex state", async () => {

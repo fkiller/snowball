@@ -32,13 +32,13 @@ done
 
 docker inspect snowball-voice >/dev/null 2>&1 || {
     printf '%s\n' 'snowball-voice is not present in the normal Docker daemon.' >&2
-    printf '%s\n' 'Run openwrt/migrate-to-existing-docker.sh first, then run this installer again.' >&2
+    printf '%s\n' 'Run deploy/openwrt/migrate-to-existing-docker.sh first, then run this installer again.' >&2
     exit 1
 }
 
 mkdir -p /usr/bin
 cp "$REPOSITORY/tools/snowball-voice-start" /usr/bin/snowball-voice-start
-cp "$REPOSITORY/openwrt/snowball-voice.init" /etc/init.d/snowball-voice
+cp "$REPOSITORY/deploy/openwrt/snowball-voice.init" /etc/init.d/snowball-voice
 chmod 0755 /usr/bin/snowball-voice-start /etc/init.d/snowball-voice
 
 # Disable the old project-specific daemon if a previous installation left it
