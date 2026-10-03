@@ -16,14 +16,9 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 COPY app ./app
-COPY build ./build
-COPY db ./db
-COPY drizzle ./drizzle
-COPY examples ./examples
 COPY public ./public
-COPY worker ./worker
-COPY .openai ./.openai
-COPY drizzle.config.ts eslint.config.mjs next-env.d.ts next.config.ts postcss.config.mjs tsconfig.json vite.config.ts ./
+COPY services/web-entry.ts ./services/
+COPY eslint.config.mjs next-env.d.ts postcss.config.mjs tsconfig.json vite.config.ts ./
 COPY tools/collect-node-notices.mjs ./tools/
 RUN npm run build
 RUN node tools/collect-node-notices.mjs

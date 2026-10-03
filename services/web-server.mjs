@@ -63,11 +63,6 @@ const assets = {
 
 const environment = {
   ASSETS: assets,
-  IMAGES: {
-    input() {
-      throw new Error("Image transformation is not enabled in the local Snowball runtime.");
-    },
-  },
 };
 
 function requestURL(request) {

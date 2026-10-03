@@ -3,7 +3,7 @@ import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
 
-test("the local web server serves the JavaScript needed to hydrate Admin", async (t) => {
+test("the local web entry serves Voice and Admin with their hydration assets", async (t) => {
   const port = 31_080;
   const server = spawn(process.execPath, ["services/web-server.mjs"], {
     cwd: new URL("..", import.meta.url),
@@ -24,12 +24,19 @@ test("the local web server serves the JavaScript needed to hydrate Admin", async
   }
 
   assert.equal(response?.status, 200);
-  const html = await response.text();
-  const source = html.match(/<script[^>]+src="([^"]+\.js)"/)?.[1];
-  assert.ok(source, "Admin HTML must reference its client entry JavaScript");
+  for (const route of ["/", "/admin"]) {
+    const page = await fetch(`http://127.0.0.1:${port}${route}`);
+    assert.equal(page.status, 200, `${route} must render`);
+    const html = await page.text();
+    const source = html.match(/<script[^>]+src="([^"]+\.js)"/)?.[1];
+    assert.ok(source, `${route} must reference its client entry JavaScript`);
 
-  const script = await fetch(`http://127.0.0.1:${port}${source}`);
-  assert.equal(script.status, 200);
-  assert.match(script.headers.get("content-type") || "", /javascript/);
-  assert.ok((await script.text()).length > 100);
+    const script = await fetch(`http://127.0.0.1:${port}${source}`);
+    assert.equal(script.status, 200);
+    assert.match(script.headers.get("content-type") || "", /javascript/);
+    assert.ok((await script.text()).length > 100);
+  }
+  const icon = await fetch(`http://127.0.0.1:${port}/branding/icon.png`);
+  assert.equal(icon.status, 200, "public assets must remain available");
+  assert.match(icon.headers.get("content-type") || "", /image\/png/);
 });

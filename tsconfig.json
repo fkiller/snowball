@@ -28,10 +28,7 @@
   "exclude": [
     "node_modules",
     "artifacts",
-    "db",
     "dist",
-    "examples",
-    "worker",
     ".wrangler"
   ]
 }

@@ -8,14 +8,8 @@ applicable to combined firmware. Prepared version: `0.4.0-alpha.1`.
 
 Target: Waveshare ESP32-S3-AUDIO-Board, 16 MB flash, 8 MB octal PSRAM.
 
-<p align="center">
-  <img src="../../docs/images/hardware/waveshare-esp32-s3-audio.jpg" width="280" alt="Waveshare ESP32-S3-AUDIO-Board">
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="../../docs/images/hardware/snowball-hardware-live.gif" width="245" alt="Snowball-Voice hardware live">
-</p>
-<p align="center">
-  <em>Waveshare ESP32-S3-AUDIO-Board running Snowball-Voice (<a href="https://x.com/fkiller/status/2088063549369102555">demo video on X</a>).</em>
-</p>
+See the [hardware showcase](../../README.md#hardware-showcase) for board and
+live-demo images; the purchasing guide contains connector details.
 
 Current development milestone:
 

@@ -6,7 +6,7 @@ The Web Client can be used without an ESP32 speaker.
 
 ## Voice Web Client
 
-![Voice Web Client ready](images/web-ui/voice-ready.png)
+The [repository home](../README.md#web-ui) contains the screen preview.
 
 - The central control explicitly starts/stops Voice. Nothing listens before
   you begin; your browser asks for microphone permission when needed.
@@ -14,8 +14,6 @@ The Web Client can be used without an ESP32 speaker.
   CAPTCHA or account recovery. Opening that console never starts Voice.
 - Recovery alerts and connection status show when attention is needed.
 - The Admin link opens the separate administrator screen.
-
-![Voice Web Client active](images/web-ui/voice-active.png)
 
 The active appearance follows authoritative Gateway/browser Voice state;
 a connected WebRTC transport alone is insufficient to display “Voice is live.”
@@ -53,10 +51,10 @@ in or opening the Browser Console does not automatically start a conversation.
 
 ## Screenshot provenance
 
-These PNGs are unmodified captures of the actual `0.4.0-alpha.1` frontend from
+The home-page PNG captures the actual `0.4.0-alpha.1` frontend from
 the isolated [browser QA run](https://github.com/fkiller/snowball/actions/runs/36963388762),
-produced by [the browser smoke test](../tests/browser-smoke.mjs). Ready and
-active screenshots use synthetic browser/media state and disposable test
-addresses/ports. They contain no production profile, password, session cookie,
+produced by [the browser smoke test](../tests/browser-smoke.mjs). It uses
+synthetic browser/media state and disposable test addresses/ports.
+It contains no production profile, password, session cookie,
 device key or real conversation. Screenshot status is illustrative; fresh
 physical and platform acceptance remains tracked in [release readiness](RELEASE_READINESS.md).

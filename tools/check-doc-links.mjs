@@ -6,7 +6,11 @@ const files = execFileSync("git", ["ls-files", "-co", "--exclude-standard", "--"
 const failures = [];
 for (const file of files) {
   const text = await readFile(file, "utf8");
-  for (const match of text.matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g)) {
+  const links = [
+    ...text.matchAll(/!?\[[^\]]*\]\(([^)]+)\)/g),
+    ...text.matchAll(/\b(?:href|src)="([^"]+)"/g),
+  ];
+  for (const match of links) {
     const target = match[1].split(/\s+"/)[0].replace(/^<|>$/g, "");
     if (/^(https?:|mailto:|#)/i.test(target)) continue;
     const filename = decodeURIComponent(target.split("#")[0]);

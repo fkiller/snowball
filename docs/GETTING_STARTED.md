@@ -20,8 +20,6 @@ No hardware, paid account, or third-party service is supplied by this repository
 | Service access | Your own ChatGPT account with Voice available | Availability and limits depend on the service/account. An OpenAI API key is not used by this integration. |
 
 <p align="center">
-  <img src="images/hardware/waveshare-esp32-s3-audio.jpg" width="300" alt="Waveshare ESP32-S3-AUDIO-Board front view">
-  &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="images/hardware/waveshare-esp32-s3-audio-details.jpg" width="300" alt="Waveshare ESP32-S3-AUDIO-Board rear view with microphones">
 </p>
 <p align="center">

@@ -111,6 +111,22 @@ source, project/Go source, copyright/common license files and SBOMs.
 
 ## Remaining manual and production gates
 
+### Current source cleanup verification (2026-10-03 UTC)
+
+The public layout cleanup removes unused D1/Drizzle/Sites template material
+and historical duplicate documents, groups platform helpers under
+`deploy/openwrt/`, and retains one home-page Web UI capture. Existing
+`v0.4.0-alpha.1` artifacts and their verified hashes remain immutable.
+
+Local locked npm install, runtime audit, lint and web build pass. Node tests
+pass 17 cases with three Windows POSIX skips; Markdown/HTML links pass for
+25 documents. The full development audit currently fails on
+[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm),
+a `braces` transitive dependency with no patched npm release at this check.
+Protected-main CI must remain blocking until that dependency is fixed.
+
+### Unexecuted acceptance
+
 - Three spoken wake/converse/end cycles, no ghost wake, acoustic barge-in,
   physical long-session confidence. Prior 10m30s evidence belongs to its
   recorded build; it is not fresh acceptance of this prerelease.
