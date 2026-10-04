@@ -137,6 +137,8 @@ All six jobs passed on integrated code commit `8b75fe7`:
 [combined CI evidence](https://github.com/fkiller/snowball/actions/runs/37214673807).
 Use the linked PR's final checks for the subsequent documentation commit.
 No audit waiver or protected-main bypass is part of this change.
+The final scan uses pinned govulncheck 1.8.0: the old 1.1.4 tool panicked on
+Go 1.27 AST syntax during the documentation rerun after race/vet passed.
 
 All four Gateway source bundles package successfully from the clean Git tree;
 full build and runtime CycloneDX SBOM generation also succeeds. A fresh

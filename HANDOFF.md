@@ -16,7 +16,10 @@ The user explicitly authorized merging all open PRs and the final pre-Day-1
 check. All nine Dependabot PR heads are integrated into this branch. All six
 combined gates pass on code commit `8b75fe7` in CI run 37214673807:
 https://github.com/fkiller/snowball/actions/runs/37214673807
-The final documentation commit must also pass protected-main checks.
+Final checks use pinned govulncheck 1.8.0. The old 1.1.4 scanner panicked on
+Go 1.27 AST KeyValueExpr during a subsequent run after race/vet passed; this
+is a scanner compatibility failure, not an accepted waiver. Every final gate
+must pass before merge.
 No production deployment, restart, daemon
 migration, physical flash or eFuse change is authorized by this cleanup.
 
