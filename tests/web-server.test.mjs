@@ -11,6 +11,8 @@ test("the local web entry serves Voice and Admin with their hydration assets", a
     stdio: ["ignore", "pipe", "pipe"],
   });
   t.after(() => server.kill("SIGTERM"));
+  let startupErrors = "";
+  server.stderr.on("data", (chunk) => { startupErrors = (startupErrors + chunk).slice(-16_384); });
 
   let response;
   for (let attempt = 0; attempt < 50; attempt += 1) {
@@ -23,7 +25,7 @@ test("the local web entry serves Voice and Admin with their hydration assets", a
     await delay(100);
   }
 
-  assert.equal(response?.status, 200);
+  assert.equal(response?.status, 200, `Web startup failed: ${startupErrors}`);
   for (const route of ["/", "/admin"]) {
     const page = await fetch(`http://127.0.0.1:${port}${route}`);
     assert.equal(page.status, 200, `${route} must render`);

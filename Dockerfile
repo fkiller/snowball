@@ -14,6 +14,7 @@ FROM node:26-bookworm-slim AS web-builder
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 WORKDIR /src
 COPY package.json package-lock.json ./
+COPY tools/fast-glob-compat ./tools/fast-glob-compat
 RUN npm ci --ignore-scripts
 COPY app ./app
 COPY public ./public

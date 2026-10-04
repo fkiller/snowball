@@ -109,21 +109,38 @@ project MIT does not relicense vendor binaries. Each Gateway architecture
 includes exact authenticated Debian source packages/build scripts, Node/noVNC
 source, project/Go source, copyright/common license files and SBOMs.
 
-## Remaining manual and production gates
-
-### Current source cleanup verification (2026-10-03 UTC)
+## Pre-Day-1 source verification (2026-10-04 UTC)
 
 The public layout cleanup removes unused D1/Drizzle/Sites template material
 and historical duplicate documents, groups platform helpers under
 `deploy/openwrt/`, and retains one home-page Web UI capture. Existing
 `v0.4.0-alpha.1` artifacts and their verified hashes remain immutable.
 
-Local locked npm install, runtime audit, lint and web build pass. Node tests
-pass 17 cases with three Windows POSIX skips; Markdown/HTML links pass for
-25 documents. The full development audit currently fails on
-[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm),
-a `braces` transitive dependency with no patched npm release at this check.
-Protected-main CI must remain blocking until that dependency is fixed.
+All nine outstanding dependency/Actions PR heads are integrated into
+[PR #16](https://github.com/fkiller/snowball/pull/16) for combined validation.
+Incompatible ESLint 10/TypeScript 7 updates are corrected to their plugins'
+supported versions. Go CI and the builder use 1.27.1; container Node uses 26.
+
+The unpatched `braces` path was removed by the scoped
+[tinyglobby compatibility adapter](../tools/fast-glob-compat/README.md),
+and Satori's fflate dependency is pinned to its patched 0.7.5 release.
+Fresh locked installs pass with zero runtime and full-development audit findings.
+Glob fixtures cover both upstream consumers and deeply nested brace input.
+The worker bundler's optional Cloudflare tracing is excluded from the local
+Node bundle; Voice/Admin rendering and hydration assets pass runtime tests.
+
+Windows web build/tests pass **19 cases**, with **three POSIX migration skips**.
+Linux CI executes those migration cases and all six protected-main gates:
+full-history secrets, web/lint/audits, Gateway race/vet/vulnerability scan,
+ESP32-S3 build, and ARM64/AMD64 image build/scan/isolated browser smoke.
+Use the linked PR's final checks for the integrated commit's CI result.
+No audit waiver or protected-main bypass is part of this change.
+
+The published alpha remains the exact original tag and binaries. Updated main
+source, layout and dependency versions apply to future builds; download users
+must follow the immutable release's included installation/flash guides.
+
+## Remaining manual and production gates
 
 ### Unexecuted acceptance
 

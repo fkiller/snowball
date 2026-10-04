@@ -1,0 +1,11 @@
+{
+  "name": "@snowball/fast-glob-compat",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Development-only tinyglobby adapter for the two build/lint fast-glob consumers",
+  "main": "index.cjs",
+  "license": "MIT",
+  "dependencies": {
+    "tinyglobby": "0.2.17"
+  }
+}

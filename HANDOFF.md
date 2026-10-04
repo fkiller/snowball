@@ -12,7 +12,10 @@ template files, and an understandable public repository layout.
 Implementation is complete on `codex/public-repo-cleanup`, based on main
 `0a8548f` (PR #15). Cleanup PR #16 is open and attached:
 https://github.com/fkiller/snowball/pull/16
-Main remains unchanged because the full development audit blocks merge.
+The user explicitly authorized merging all open PRs and the final pre-Day-1
+check. All nine Dependabot PR heads are now merged locally into this branch;
+merge PR #16 only after its combined six required checks pass, then verify
+GitHub recognizes the dependency PRs as merged and fetch main.
 No production deployment, restart, daemon
 migration, physical flash or eFuse change is authorized by this cleanup.
 
@@ -38,30 +41,37 @@ migration, physical flash or eFuse change is authorized by this cleanup.
 
 ## Verification and exact next action
 
-Locked npm install, runtime audit (zero findings), lint and web build passed.
+Fresh locked npm install, runtime and full audit (zero findings), lint and web build passed.
 The existing roadmap-wording assertion was removed from the runtime security
-test; all behavior assertions remain. The final Node test run passed 17 cases
+test; all behavior assertions remain. The final Node test run passed 19 cases
 with three Windows POSIX skips. HTML/Markdown links passed for 25 documents.
 Whole-file hashes found no identical tracked files; exact normalized prose
 blocks of 150+ characters found no duplicates in public guides. Root tracked
 directories fell from 19 to 13. Manual review removed semantic/gallery overlap.
 
-BLOCKER: full development audit fails on GHSA-vfj7-8cjw-p6xm (braces <=3.0.3),
-newly reviewed 2026-10-02. No patched npm release exists at the current check.
-It is transitive through @next/eslint-plugin-next and vinext's commonjs plugin;
-runtime audit is clean. Do not use npm audit fix --force, downgrade frameworks,
-disable the audit or bypass protected-main checks. The full audit runs after
-web/migration validation so tests produce evidence, but remains a blocking step.
+Resolved GHSA-vfj7-8cjw-p6xm without an audit exception: tools/fast-glob-compat
+adapts tinyglobby for the actual Next/Vite consumers, replacing fast-glob's
+micromatch/braces tree via a local npm override. Fresh lock generation was
+necessary: npm's in-place update retained an invalid nested fast-glob package.
+Both upstream paths now resolve to the adapter; npm ls is clean. Its fixtures
+test directories, extension braces, ignores, absolute paths, CommonJS/ESM and
+deeply nested input. Satori's fflate is overridden to patched 0.7.5.
+ESLint 9.39.5 and TypeScript 6.0.3 satisfy existing plugin peer constraints;
+Dependabot defers incompatible major updates until peers support them.
+vinext 1.0.1 injects optional Cloudflare tracing when it detects the bundler;
+vite.config.ts excludes only that integration for our Node runtime. The runtime
+test caught the unsupported cloudflare: import and now passes after the fix.
+Dockerfile copies the local adapter before the builder's locked install;
+runtime-only locked install also passes without the dev adapter directory.
+Go builder/CI is 1.27.1; Docker Node is 26. All updated Actions retain SHA pins.
 
-Exact next action: inspect PR #16's latest checks, then resolve the transitive
-development dependency advisory with a verified patch or compatible tool
-change. No upstream patched npm version was available at the last check.
-Rerun all six checks after a dependency fix; merge only when all pass.
+Exact next action: push the integrated branch and inspect PR #16's combined
+six checks. Repair any failure, merge only once all pass, confirm all ten PRs
+are merged, and verify main's home page and public release links/assets.
 GitHub branch-preview verification passed: banner, inline icon/title, all badges,
 hardware media and the single Web UI image load; no details disclosure remains.
-Initial PR CI confirms lint/build/test, documentation links and Linux migration
-tests pass before the blocking development audit. Secret and Gateway jobs pass.
-Use the live PR checks for the final image/firmware results and latest commit.
+The previous PR CI had five passing jobs but failed its development audit.
+Use the live PR checks for the new integrated dependency/image/firmware results.
 
 The web entry and moved installer references are the material risk to verify.
 Existing migration mocks must still pass on Linux. No local hardware or VM

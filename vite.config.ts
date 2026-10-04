@@ -11,6 +11,20 @@ export default defineConfig(async () => {
 
   return {
     plugins: [
+      {
+        // vinext detects the worker bundler and injects Cloudflare tracing.
+        // We execute the bundle in Node; only that optional integration is empty.
+        name: "snowball:node-tracing",
+        enforce: "pre",
+        resolveId(id) {
+          if (id === "vinext/internal/server/cloudflare-workers-tracing") {
+            return "\0snowball:node-tracing";
+          }
+        },
+        load(id) {
+          if (id === "\0snowball:node-tracing") return "export {};";
+        },
+      },
       vinext(),
       cloudflare({
         viteEnvironment: { name: "rsc", childEnvironments: ["ssr"] },
