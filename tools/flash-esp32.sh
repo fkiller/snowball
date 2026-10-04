@@ -18,7 +18,7 @@ if [ -r "$FLASHER_SOURCE" ] && command -v sha256sum >/dev/null 2>&1; then
     installed_hash=$(sha256sum "$0" | awk '{print $1}')
     source_hash=$(sha256sum "$FLASHER_SOURCE" | awk '{print $1}')
     if [ "$installed_hash" != "$source_hash" ]; then
-        printf 'Installed ESP32 flasher is stale; run openwrt/install-esp32-debug.sh before flashing.\n' >&2
+        printf 'Installed ESP32 flasher is stale; run deploy/openwrt/install-esp32-debug.sh before flashing.\n' >&2
         exit 1
     fi
 fi

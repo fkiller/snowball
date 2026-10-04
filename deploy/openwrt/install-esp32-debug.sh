@@ -8,7 +8,7 @@ cp "$REPOSITORY/tools/esp32-serial-logger.sh" /usr/libexec/snowball-esp32-serial
 cp "$REPOSITORY/tools/esp32-log-framer.lua" /usr/libexec/snowball-esp32-log-framer.lua
 cp "$REPOSITORY/tools/esp32-log-framer.sh" /usr/libexec/snowball-esp32-log-framer.sh
 cp "$REPOSITORY/tools/snowball-board.sh" /usr/libexec/snowball-board.sh
-cp "$REPOSITORY/openwrt/snowball-esp32-debug.init" /etc/init.d/snowball-esp32-debug
+cp "$REPOSITORY/deploy/openwrt/snowball-esp32-debug.init" /etc/init.d/snowball-esp32-debug
 cp "$REPOSITORY/tools/snowball-esp32-debug" /usr/bin/snowball-esp32-debug
 cp "$REPOSITORY/tools/esp32-voice-trace-report.sh" /usr/bin/snowball-esp32-voice-report
 cp "$REPOSITORY/tools/flash-esp32.sh" /usr/bin/snowball-flash-esp32

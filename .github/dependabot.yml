@@ -7,6 +7,15 @@ updates:
     groups:
       web-dependencies:
         patterns: ["*"]
+    # The installed React lint plugins support ESLint 9; typescript-eslint
+    # currently supports TypeScript below 6.1. Revisit with their peer updates.
+    ignore:
+      - dependency-name: eslint
+        versions: [">=10"]
+      - dependency-name: "@eslint/js"
+        versions: [">=10"]
+      - dependency-name: typescript
+        versions: [">=6.1"]
   - package-ecosystem: gomod
     directory: /gateway
     schedule:

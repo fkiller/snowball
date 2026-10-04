@@ -1,53 +1,43 @@
-![Snowball mascot with headset and original waveform](public/branding/banner.png)
+<p align="center">
+  <img src="public/branding/banner.png" alt="Snowball voice banner" width="100%">
+</p>
 
-<p align="center"><img src="public/branding/icon.png" width="112" alt="Snowball voice mascot"></p>
-<h1 align="center">Snowball-Voice · Snowball-Voice-Gate</h1>
-<p align="center">A little speaker. A voice companion. Your own LAN Gateway.</p>
-<p align="center"><a href="https://github.com/fkiller/snowball/releases/tag/v0.4.0-alpha.1">Download both products</a> · <a href="#web-ui">Web UI</a> · <a href="docs/GETTING_STARTED.md">Buy &amp; build</a> · <a href="docs/PLATFORMS.md">Install your platform</a> · <a href="docs/GETTING_STARTED.md#6-flash-without-erasing-identity">Flash &amp; pair</a></p>
+<h1 align="center">
+  <img src="public/branding/icon.png" width="48" height="48" valign="middle" alt="Snowball icon">
+  Snowball-Voice · Snowball-Voice-Gate — Preview
+</h1>
+
+<p align="center">
+  <strong>An ESP32 voice companion and your own LAN Gateway for ChatGPT web Voice</strong>
+</p>
+
+<p align="center">
+  <a href="https://github.com/fkiller/snowball/releases/tag/v0.4.0-alpha.1">Download</a> |
+  <a href="docs/GETTING_STARTED.md">Getting started</a> |
+  <a href="docs/PLATFORMS.md">Platforms</a> |
+  <a href="#web-ui">Web UI</a>
+</p>
+
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/Project_source-MIT-blue.svg" alt="Project source: MIT"></a>
+  <a href="https://github.com/fkiller/snowball/releases/tag/v0.4.0-alpha.1"><img src="https://img.shields.io/badge/Release-0.4.0--alpha.1-orange.svg" alt="Release: 0.4.0-alpha.1"></a>
+  <a href="docs/PLATFORMS.md"><img src="https://img.shields.io/badge/Gateway-Linux_ARM64_%7C_AMD64-green.svg" alt="Gateway: Linux ARM64 and AMD64"></a>
+  <a href="https://github.com/fkiller/snowball/actions/workflows/security-gate.yml"><img src="https://github.com/fkiller/snowball/actions/workflows/security-gate.yml/badge.svg?branch=main" alt="Security gate"></a>
+</p>
+
+---
+
+## Overview
 
 **Snowball-Voice** is the ESP32-S3 speaker client. **Snowball-Voice-Gate** is
-the LAN-only Gateway, Web Client, and recovery console for a persistent
-ChatGPT web Voice session.
+the LAN Gateway, Web Client, and recovery console for a persistent ChatGPT
+web Voice session. The Web Client also works without an ESP32.
 
-> Experimental developer preview. This unofficial project drives ChatGPT's
-> web interface, not a stable API. It is not affiliated with or endorsed by
-> OpenAI. Upstream UI/account restrictions can require maintenance.
+This is an experimental developer preview. The unofficial ChatGPT web adapter
+can break when the upstream interface or account requirements change. The
+project is not affiliated with or endorsed by OpenAI.
 
-## Web UI
-
-Snowball-Voice-Gate includes a browser **Voice Web Client** and **Admin** screen.
-The Web Client lets you start/stop Voice, open the protected ChatGPT Browser
-Console, and view connection/recovery status. Admin provides device pairing,
-Gateway status and settings. You can use the Web Client before buying an ESP32.
-
-![Snowball-Voice-Gate Web Client ready screen](docs/images/web-ui/voice-ready.png)
-
-<details>
-<summary>See the active Voice screen</summary>
-
-![Snowball-Voice-Gate Web Client active screen](docs/images/web-ui/voice-active.png)
-
-</details>
-
-These are captures of the actual application from isolated synthetic QA, with
-test status/address values; they are not a recording of a live ChatGPT call.
-
-After installing the Gateway and trusting its HTTPS certificate, open
-`https://YOUR_GATEWAY_LAN_IP:8443/` for Voice or `/admin` for administration.
-The UI runs on your LAN Gateway; this GitHub page provides screenshots and
-source. [Web UI tour and access guide](docs/WEB_UI.md) ·
-[HTTPS, administrator setup and ChatGPT login](docs/GETTING_STARTED.md#4-set-up-https-and-sign-in).
-
-## Start here
-
-[Buy, install tools, compile, flash, pair, and run](docs/GETTING_STARTED.md).
-[Gateway platform-specific releases and setup](docs/PLATFORMS.md).
-
-| Product | Role | Alpha version |
-| --- | --- | --- |
-| Snowball-Voice-Gate | Linux ARM64/AMD64 container; Windows/macOS use a LAN-connected Linux VM/host | `0.4.0-alpha.1` |
-| Snowball-Voice | Waveshare ESP32-S3-AUDIO-Board, 16 MB flash / 8 MB PSRAM | `0.4.0-alpha.1` |
-| Device protocol | Pinned HTTPS + PCMA DTLS-SRTP | `1` |
+## Hardware showcase
 
 <p align="center">
   <img src="docs/images/hardware/waveshare-esp32-s3-audio.jpg" width="300" alt="Waveshare ESP32-S3-AUDIO-Board">
@@ -55,82 +45,79 @@ source. [Web UI tour and access guide](docs/WEB_UI.md) ·
   <img src="docs/images/hardware/snowball-hardware-live.gif" width="265" alt="Snowball-Voice hardware in operation">
 </p>
 <p align="center">
-  <em>Left: Supported board (<a href="https://www.waveshare.com/esp32-s3-audio-board.htm">Waveshare ESP32-S3-AUDIO-Board</a>) · Right: Live hardware in operation (<a href="https://x.com/fkiller/status/2088063549369102555">Watch video demo on X</a>)</em>
+  <em>Supported board: <a href="https://www.waveshare.com/esp32-s3-audio-board.htm">Waveshare ESP32-S3-AUDIO-Board</a> · <a href="https://x.com/fkiller/status/2088063549369102555">Live hardware demo on X</a></em>
 </p>
 
-Check [Releases](https://github.com/fkiller/snowball/releases) for actually
-published tags/assets. CI publishes both products with verified downloads,
-Linux image archives, source, licenses, and SBOMs. Existing identifiers stay `snowball-voice`, `/data`, and
-`snowball_speaker.bin` so upgrades preserve credentials.
+## Web UI
 
-The [0.4.0-alpha.1 release](https://github.com/fkiller/snowball/releases/tag/v0.4.0-alpha.1)
-is public. [CI publication and anonymous verification passed](https://github.com/fkiller/snowball/actions/runs/36998111226)
-for every download; physical and VM acceptance limits remain documented below.
+The Voice Web Client provides explicit start/stop, ChatGPT Browser Console
+access, and connection/recovery status. Admin provides pairing and settings.
 
-## What works
+![Snowball-Voice-Gate Web Client](docs/images/web-ui/voice-ready.png)
 
-- Voice Web Client with explicit microphone/WebRTC start and stop.
-- Persistent Chromium and protected Browser Console for manual login/CAPTCHA.
-  Opening it never starts Voice.
-- Separate administrator authentication, CSRF/origin checks, strict bounded
-  JSON, and private state writes.
-- ESP32 `Hi ESP` wake model, bounded English command tails, candidate sync,
-  and bounded microphone/playback queues.
-- Desktop Chrome/Edge Web Serial pairing, pinned CA, P-256 identity,
-  one-use enrollment, and replay-protected control/media.
-- Prior physical full-duplex transport acceptance: **10m30s** with no drops or
-  unexpected resets. [Measured evidence](docs/FULL_DUPLEX_STABILITY.md).
+Actual application capture from isolated synthetic QA; status and addresses
+are test values. For local access and controls, see the [Web UI guide](docs/WEB_UI.md).
 
-## Fresh Linux Gateway install
+## Getting started
 
-Set `SNOWBALL_LAN_IP` in `compose.yaml` to a private IPv4 address actually
-assigned to the Linux host, then:
+| Product | Runtime | Guide |
+| --- | --- | --- |
+| Snowball-Voice-Gate | Linux ARM64/AMD64 container; Windows/macOS launchers use a LAN Linux VM/host | [Platform installation](docs/PLATFORMS.md) |
+| Snowball-Voice | Waveshare ESP32-S3-AUDIO-Board, 16 MB flash / 8 MB PSRAM | [Purchase → tools → compile → flash → pair → run](docs/GETTING_STARTED.md) |
 
-```sh
-git clone https://github.com/fkiller/snowball.git
-cd snowball
-git checkout v0.4.0-alpha.1
-sh tools/gate-start.sh download
-SNOWBALL_LAN_IP=192.168.1.20 sh tools/gate-start.sh install
-sh tools/gate-start.sh status
-```
-
-Continue with [HTTPS and administrator/ChatGPT setup](docs/GETTING_STARTED.md#4-set-up-https-and-sign-in).
-Existing users follow [upgrade/rollback](docs/OPENWRT.md#upgrade-and-rollback).
-`Dockerfile.update` depends on an old local base and is not a first-install path.
+Both products ship together in the release linked above, with image archives,
+firmware, checksums, corresponding source, licenses and SBOMs.
+[CI publication and anonymous download verification passed](https://github.com/fkiller/snowball/actions/runs/36998111226).
+Manual acceptance still has the limits below.
 
 ## Boundaries and known limits
 
-Only the configured private LAN IPv4 exposes TCP **8088**, TCP **8443**, and
-UDP **49000**. CDP, VNC, internal APIs, and RTP stay loopback-only. No WAN
-forwarding, STUN/TURN, or cloud relay. ChatGPT/optional Web Push require
-outbound Internet; conversation audio goes to ChatGPT. [Privacy](docs/PRIVACY.md).
+- **LAN-only:** the configured private IPv4 exposes TCP 8088/8443 and UDP
+  49000. Internal services remain loopback-only. No WAN forwarding, STUN/TURN
+  or cloud relay. ChatGPT and optional Web Push use outbound Internet;
+  conversation audio goes to ChatGPT. See [privacy](docs/PRIVACY.md).
+- **Separate logins:** Snowball administrator authentication protects the UI,
+  APIs and Browser Console. Opening the console or signing into ChatGPT never
+  starts Voice. The Gateway/browser state is authoritative for live status.
+- **Development firmware:** wake phrase `Hi ESP`, AEC disabled, plaintext
+  NVS, and incomplete Secure Boot, flash encryption, signed OTA and anti-rollback.
+  Fresh acoustic, repeated-cycle, barge-in and VM acceptance remain open.
+  Prior [10m30s transport evidence](docs/FULL_DUPLEX_STABILITY.md) is separate.
+- **Browser adapter:** Chromium uses `--no-sandbox` inside a constrained
+  non-root container. Visible ChatGPT Projects support bounded turn mode;
+  Codex local projects need a future paired desktop adapter. USB pairing
+  requires desktop Chrome/Edge; supported phone browsers can use the Web Client.
 
-The ESP32 firmware is for development: AEC is disabled, NVS is plaintext,
-and production Secure Boot, flash encryption, signed OTA, and anti-rollback
-are incomplete. The wake phrase is **Hi ESP**. Ordinary acoustic cycles,
-barge-in, and broader product acceptance remain open. Chromium currently uses
-`--no-sandbox` inside a constrained non-root container; keep the LAN boundary.
+## Repository structure
 
-Visible ChatGPT Web Projects support bounded turn-based automation. Codex
-local projects return a capability error until a paired desktop adapter exists.
-USB setup requires desktop Chrome/Edge; phones can use the Web Client.
+| Path | Purpose |
+| --- | --- |
+| `app/`, `public/` | Voice/Admin UI, styles, service worker and branding |
+| `gateway/` | Go API, authentication, device protocol and emulator tests |
+| `services/`, `container/` | Browser controller, web entry/server and container processes |
+| `firmware/esp32-s3-audio/` | ESP32 source, pinned components and board configuration |
+| `deploy/openwrt/` | Optional OpenWrt boot services, USB collector installation and daemon migration |
+| `runtime/daemon.json` | Legacy dedicated-daemon configuration; retained at its existing path for compatibility |
+| `tools/`, `tests/`, `.github/` | Install/flash/release helpers, verification and CI/CD |
+| `docs/`, `LICENSES/` | User guides, acceptance evidence and vendor licenses |
 
-## Documentation
+The Gateway is built with the root `Dockerfile`. Persistent container/volume
+identifiers remain `snowball-voice` and `/data`; firmware remains
+`snowball_speaker.bin`. Never erase NVS at `0x9000`.
+
+## Further documentation
 
 | Document | Purpose |
 | --- | --- |
-| [Getting started](docs/GETTING_STARTED.md) | Purchase → tools → compile → flash → pair → run |
-| [Platforms](docs/PLATFORMS.md) | Linux ARM64/AMD64, Windows, macOS, OpenWrt packages/setup |
-| [Web UI](docs/WEB_UI.md) | Screen previews, Voice Web Client, Admin and how to open them |
-| [Architecture](ARCHITECTURE.md) | Components, media, persistence, trust boundaries |
-| [Firmware](firmware/esp32-s3-audio/README.md) | ESP32 implementation and USB protocol |
-| [Pairing acceptance](docs/PAIRING_ACCEPTANCE.md) | Board, registry, proof, runtime gates |
+| [Architecture](ARCHITECTURE.md) | Components, media and trust boundaries |
+| [Firmware](firmware/esp32-s3-audio/README.md) | Implementation and USB protocol |
+| [Pairing acceptance](docs/PAIRING_ACCEPTANCE.md) | Device identity and runtime gates |
 | [Wake commands](docs/WAKE_COMMANDS.md) | Command tails and project behavior |
 | [Test scenarios](docs/TEST_SCENARIOS.md) | Physical/browser acceptance |
 | [OpenWrt operations](docs/OPENWRT.md) | Optional boot/migration and upgrade/rollback |
-| [Release plan](docs/RELEASE_PLAN.md) / [readiness](docs/RELEASE_READINESS.md) | Assets, gates, and actual results |
-| [Security](SECURITY.md) / [Contributing](CONTRIBUTING.md) | Private reports and development checks |
+| [Release plan](docs/RELEASE_PLAN.md) / [readiness](docs/RELEASE_READINESS.md) | Publication gates and measured results |
+| [Roadmap](docs/ROADMAP.md) | Remaining product work |
+| [Security](SECURITY.md) / [Contributing](CONTRIBUTING.md) | Reports and development checks |
 
 ## License
 

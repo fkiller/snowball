@@ -18,6 +18,7 @@ On Linux, from the repository root:
 ```sh
 npm ci --ignore-scripts
 npm audit --omit=dev --audit-level=high
+npm audit --audit-level=high
 npm run lint
 npm test
 (cd gateway && go test -race ./... && go vet ./...)
@@ -33,6 +34,12 @@ include the relevant security tests and isolated browser smoke result.
 Windows can run lint, build, web tests, Go vet, and protocol/emulator tests.
 Gateway permission and `/tmp` tests require Linux; a Windows failure is not a
 substitute for a passing Linux race suite. See the setup guide for tool installs.
+
+React lint plugins currently require ESLint 9, and typescript-eslint requires
+TypeScript below 6.1. Keep their pinned versions compatible; do not force peer
+resolution. The [development glob adapter](tools/fast-glob-compat/README.md)
+removes an unpatched transitive parser instead of suppressing its audit finding.
+CI still blocks high-severity findings in both runtime and development trees.
 
 Keep PRs small, add meaningful regression tests for behavior changes, and
 update user documentation and HANDOFF.md when state materially changes.

@@ -109,7 +109,51 @@ project MIT does not relicense vendor binaries. Each Gateway architecture
 includes exact authenticated Debian source packages/build scripts, Node/noVNC
 source, project/Go source, copyright/common license files and SBOMs.
 
+## Pre-Day-1 source verification (2026-10-04 UTC)
+
+The public layout cleanup removes unused D1/Drizzle/Sites template material
+and historical duplicate documents, groups platform helpers under
+`deploy/openwrt/`, and retains one home-page Web UI capture. Existing
+`v0.4.0-alpha.1` artifacts and their verified hashes remain immutable.
+
+All nine outstanding dependency/Actions PR heads are integrated into
+[PR #16](https://github.com/fkiller/snowball/pull/16) for combined validation.
+Incompatible ESLint 10/TypeScript 7 updates are corrected to their plugins'
+supported versions. Go CI and the builder use 1.27.1; container Node uses 26.
+
+The unpatched `braces` path was removed by the scoped
+[tinyglobby compatibility adapter](../tools/fast-glob-compat/README.md),
+and Satori's fflate dependency is pinned to its patched 0.7.5 release.
+Fresh locked installs pass with zero runtime and full-development audit findings.
+Glob fixtures cover both upstream consumers and deeply nested brace input.
+The worker bundler's optional Cloudflare tracing is excluded from the local
+Node bundle; Voice/Admin rendering and hydration assets pass runtime tests.
+
+Windows web build/tests pass **19 cases**, with **three POSIX migration skips**.
+Linux CI executes those migration cases and all six protected-main gates:
+full-history secrets, web/lint/audits, Gateway race/vet/vulnerability scan,
+ESP32-S3 build, and ARM64/AMD64 image build/scan/isolated browser smoke.
+All six jobs passed on integrated code commit `8b75fe7`:
+[combined CI evidence](https://github.com/fkiller/snowball/actions/runs/37214673807).
+Use the linked PR's final checks for the subsequent documentation commit.
+No audit waiver or protected-main bypass is part of this change.
+The final scan uses pinned govulncheck 1.8.0: the old 1.1.4 tool panicked on
+Go 1.27 AST syntax during the documentation rerun after race/vet passed.
+
+All four Gateway source bundles package successfully from the clean Git tree;
+full build and runtime CycloneDX SBOM generation also succeeds. A fresh
+anonymous manifest download matches its GitHub SHA-256, and all 30 listed
+file sizes/digests still match the 31 public release assets. This metadata
+recheck complements the original CI's complete authenticated/anonymous file
+download verification; it does not claim a new download of the 5.96 GB set.
+
+The published alpha remains the exact original tag and binaries. Updated main
+source, layout and dependency versions apply to future builds; download users
+must follow the immutable release's included installation/flash guides.
+
 ## Remaining manual and production gates
+
+### Unexecuted acceptance
 
 - Three spoken wake/converse/end cycles, no ghost wake, acoustic barge-in,
   physical long-session confidence. Prior 10m30s evidence belongs to its

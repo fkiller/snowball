@@ -6,7 +6,7 @@ import path from "node:path";
 import os from "node:os";
 
 const linux = process.platform === "linux";
-const script = new URL("../openwrt/migrate-to-existing-docker.sh", import.meta.url);
+const script = new URL("../deploy/openwrt/migrate-to-existing-docker.sh", import.meta.url);
 const mock = `#!/usr/bin/env node
 const fs=require('fs'),path=require('path');
 const p=process.env.MOCK_STATE,s=JSON.parse(fs.readFileSync(p));

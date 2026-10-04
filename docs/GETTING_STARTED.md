@@ -20,8 +20,6 @@ No hardware, paid account, or third-party service is supplied by this repository
 | Service access | Your own ChatGPT account with Voice available | Availability and limits depend on the service/account. An OpenAI API key is not used by this integration. |
 
 <p align="center">
-  <img src="images/hardware/waveshare-esp32-s3-audio.jpg" width="300" alt="Waveshare ESP32-S3-AUDIO-Board front view">
-  &nbsp;&nbsp;&nbsp;&nbsp;
   <img src="images/hardware/waveshare-esp32-s3-audio-details.jpg" width="300" alt="Waveshare ESP32-S3-AUDIO-Board rear view with microphones">
 </p>
 <p align="center">
@@ -68,7 +66,7 @@ If Docker reports permission denied, use the administrator's supported Docker
 access method. Membership of the Docker group grants host-level authority.
 
 For Windows contributors install [Git for Windows](https://git-scm.com/downloads/win),
-[Node.js 22 LTS](https://nodejs.org/en/download), and [Go 1.26.8 or newer](https://go.dev/dl/).
+[Node.js 22 LTS](https://nodejs.org/en/download), and [Go 1.27.1 or newer](https://go.dev/dl/).
 Docker Desktop with the Linux engine/WSL2 can build images, but Windows Docker
 Desktop runtime networking is not the accepted Gateway deployment path. Run
 the Gateway on the Linux host and use Windows for compilation/USB setup.
@@ -342,7 +340,7 @@ personal state or factory backup with a release.
 
 ## Contributor verification
 
-Install native Node 22 and Go 1.26.8+ only if running host checks. From the root:
+Install native Node 22 and Go 1.27.1+ only if running host checks. From the root:
 
 ```sh
 npm ci --ignore-scripts
