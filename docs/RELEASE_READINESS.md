@@ -133,8 +133,17 @@ Windows web build/tests pass **19 cases**, with **three POSIX migration skips**.
 Linux CI executes those migration cases and all six protected-main gates:
 full-history secrets, web/lint/audits, Gateway race/vet/vulnerability scan,
 ESP32-S3 build, and ARM64/AMD64 image build/scan/isolated browser smoke.
-Use the linked PR's final checks for the integrated commit's CI result.
+All six jobs passed on integrated code commit `8b75fe7`:
+[combined CI evidence](https://github.com/fkiller/snowball/actions/runs/37214673807).
+Use the linked PR's final checks for the subsequent documentation commit.
 No audit waiver or protected-main bypass is part of this change.
+
+All four Gateway source bundles package successfully from the clean Git tree;
+full build and runtime CycloneDX SBOM generation also succeeds. A fresh
+anonymous manifest download matches its GitHub SHA-256, and all 30 listed
+file sizes/digests still match the 31 public release assets. This metadata
+recheck complements the original CI's complete authenticated/anonymous file
+download verification; it does not claim a new download of the 5.96 GB set.
 
 The published alpha remains the exact original tag and binaries. Updated main
 source, layout and dependency versions apply to future builds; download users

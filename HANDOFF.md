@@ -9,13 +9,14 @@ template files, and an understandable public repository layout.
 
 ## Current task and state
 
-Implementation is complete on `codex/public-repo-cleanup`, based on main
-`0a8548f` (PR #15). Cleanup PR #16 is open and attached:
+Implementation is delivered through `codex/public-repo-cleanup`, based on main
+`0a8548f` (PR #15). PR #16 is attached; its live page records merge status:
 https://github.com/fkiller/snowball/pull/16
 The user explicitly authorized merging all open PRs and the final pre-Day-1
-check. All nine Dependabot PR heads are now merged locally into this branch;
-merge PR #16 only after its combined six required checks pass, then verify
-GitHub recognizes the dependency PRs as merged and fetch main.
+check. All nine Dependabot PR heads are integrated into this branch. All six
+combined gates pass on code commit `8b75fe7` in CI run 37214673807:
+https://github.com/fkiller/snowball/actions/runs/37214673807
+The final documentation commit must also pass protected-main checks.
 No production deployment, restart, daemon
 migration, physical flash or eFuse change is authorized by this cleanup.
 
@@ -44,7 +45,7 @@ migration, physical flash or eFuse change is authorized by this cleanup.
 Fresh locked npm install, runtime and full audit (zero findings), lint and web build passed.
 The existing roadmap-wording assertion was removed from the runtime security
 test; all behavior assertions remain. The final Node test run passed 19 cases
-with three Windows POSIX skips. HTML/Markdown links passed for 25 documents.
+with three Windows POSIX skips. HTML/Markdown links passed for 26 documents.
 Whole-file hashes found no identical tracked files; exact normalized prose
 blocks of 150+ characters found no duplicates in public guides. Root tracked
 directories fell from 19 to 13. Manual review removed semantic/gallery overlap.
@@ -65,13 +66,18 @@ Dockerfile copies the local adapter before the builder's locked install;
 runtime-only locked install also passes without the dev adapter directory.
 Go builder/CI is 1.27.1; Docker Node is 26. All updated Actions retain SHA pins.
 
-Exact next action: push the integrated branch and inspect PR #16's combined
-six checks. Repair any failure, merge only once all pass, confirm all ten PRs
-are merged, and verify main's home page and public release links/assets.
+Exact next action: inspect PR #16. If still open, wait for the final six checks
+and merge with the already-authorized merge strategy; do not squash its PR
+ancestry. Confirm PRs #2-#9, #16 and #17 are merged, fetch current main, and
+verify its visitor home page. If already merged, continue from current main.
+All four local Gateway source bundles and full/runtime npm SBOM generation
+pass. Anonymous release-manifest download and all 30 asset size/GitHub digest
+matches pass; full 5.96 GB downloads were previously checked by publication CI.
 GitHub branch-preview verification passed: banner, inline icon/title, all badges,
 hardware media and the single Web UI image load; no details disclosure remains.
 The previous PR CI had five passing jobs but failed its development audit.
-Use the live PR checks for the new integrated dependency/image/firmware results.
+The integrated run now passes all six, including that audit, Linux migration
+tests, firmware compilation and native ARM64/AMD64 build/scan/browser smoke.
 
 The web entry and moved installer references are the material risk to verify.
 Existing migration mocks must still pass on Linux. No local hardware or VM
