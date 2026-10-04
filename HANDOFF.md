@@ -9,13 +9,23 @@ template files, and an understandable public repository layout.
 
 ## Current task and state
 
-Implementation is delivered through `codex/public-repo-cleanup`, based on main
-`0a8548f` (PR #15). PR #16 is attached; its live page records merge status:
+The public cleanup and initial dependency integration merged through PR #16
+at main `f57b543`; all ten original PRs (#2-#9, #16, #17) are merged:
 https://github.com/fkiller/snowball/pull/16
 The user explicitly authorized merging all open PRs and the final pre-Day-1
-check. All nine Dependabot PR heads are integrated into this branch. All six
+check. All six
 combined gates pass on code commit `8b75fe7` in CI run 37214673807:
 https://github.com/fkiller/snowball/actions/runs/37214673807
+Final PR checks passed in run 37215089674 and merged-main checks passed in
+run 37215363925. Dependabot then generated PRs #18/#19 for the later-added
+release recovery workflow and #20 for globals 17.13.0/Vite 8.3.2. These heads
+are integrated on `codex/day1-final-updates` for one final protected merge.
+The two recovery checkout steps have names explaining their different roots:
+current trusted recovery tools versus immutable tagged source in source/.
+prepare-release.yml now checks the actual upload/download roundtrip for the
+firmware and four platform archives (five checksums) plus the runtime SBOM.
+Run this read-only review workflow on the existing immutable alpha tag to
+verify updated artifact Actions; it must not publish or overwrite releases.
 Final checks use pinned govulncheck 1.8.0. The old 1.1.4 scanner panicked on
 Go 1.27 AST KeyValueExpr during a subsequent run after race/vet passed; this
 is a scanner compatibility failure, not an accepted waiver. Every final gate
@@ -69,10 +79,13 @@ Dockerfile copies the local adapter before the builder's locked install;
 runtime-only locked install also passes without the dev adapter directory.
 Go builder/CI is 1.27.1; Docker Node is 26. All updated Actions retain SHA pins.
 
-Exact next action: inspect PR #16. If still open, wait for the final six checks
-and merge with the already-authorized merge strategy; do not squash its PR
-ancestry. Confirm PRs #2-#9, #16 and #17 are merged, fetch current main, and
-verify its visitor home page. If already merged, continue from current main.
+Exact next action: inspect the PR for `codex/day1-final-updates`. If still open,
+wait for all six checks and merge with the already-authorized merge strategy;
+do not squash its PR ancestry. Confirm PRs #18-#20 are merged as well, fetch
+current main, and verify its checks and visitor home page. If already merged,
+continue from current main. Do not redo the completed cleanup/publication.
+Also confirm the read-only Prepare release artifacts workflow's build and
+download/checksum verification succeed. Existing release artifacts stay intact.
 All four local Gateway source bundles and full/runtime npm SBOM generation
 pass. Anonymous release-manifest download and all 30 asset size/GitHub digest
 matches pass; full 5.96 GB downloads were previously checked by publication CI.

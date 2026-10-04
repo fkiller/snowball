@@ -139,6 +139,14 @@ Use the linked PR's final checks for the subsequent documentation commit.
 No audit waiver or protected-main bypass is part of this change.
 The final scan uses pinned govulncheck 1.8.0: the old 1.1.4 tool panicked on
 Go 1.27 AST syntax during the documentation rerun after race/vet passed.
+The final PR run [37215089674](https://github.com/fkiller/snowball/actions/runs/37215089674)
+and merged-main run [37215363925](https://github.com/fkiller/snowball/actions/runs/37215363925)
+both passed all six checks. PR #16 and all nine initial dependency PRs merged.
+Follow-up Dependabot PRs #18-#20 update the later-added recovery workflow,
+globals and Vite; their integrated branch receives the same required checks.
+The read-only review pipeline also verifies an actual upload/download roundtrip
+with updated artifact Actions: firmware plus all four Gateway bundle checksums
+and the runtime CycloneDX SBOM. Published assets are not replaced by this check.
 
 All four Gateway source bundles package successfully from the clean Git tree;
 full build and runtime CycloneDX SBOM generation also succeeds. A fresh
