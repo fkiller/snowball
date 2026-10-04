@@ -22,6 +22,10 @@ release recovery workflow and #20 for globals 17.13.0/Vite 8.3.2. These heads
 are integrated on `codex/day1-final-updates` for one final protected merge.
 The two recovery checkout steps have names explaining their different roots:
 current trusted recovery tools versus immutable tagged source in source/.
+prepare-release.yml now checks the actual upload/download roundtrip for the
+firmware and four platform archives (five checksums) plus the runtime SBOM.
+Run this read-only review workflow on the existing immutable alpha tag to
+verify updated artifact Actions; it must not publish or overwrite releases.
 Final checks use pinned govulncheck 1.8.0. The old 1.1.4 scanner panicked on
 Go 1.27 AST KeyValueExpr during a subsequent run after race/vet passed; this
 is a scanner compatibility failure, not an accepted waiver. Every final gate
@@ -80,6 +84,8 @@ wait for all six checks and merge with the already-authorized merge strategy;
 do not squash its PR ancestry. Confirm PRs #18-#20 are merged as well, fetch
 current main, and verify its checks and visitor home page. If already merged,
 continue from current main. Do not redo the completed cleanup/publication.
+Also confirm the read-only Prepare release artifacts workflow's build and
+download/checksum verification succeed. Existing release artifacts stay intact.
 All four local Gateway source bundles and full/runtime npm SBOM generation
 pass. Anonymous release-manifest download and all 30 asset size/GitHub digest
 matches pass; full 5.96 GB downloads were previously checked by publication CI.
