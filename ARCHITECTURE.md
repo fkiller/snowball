@@ -104,6 +104,23 @@ flowchart LR
 
 Chromium policy pre-authorizes audio capture only for `https://chatgpt.com` and its HTTPS subdomains. PulseAudio exposes the WebRTC uplink as a named remapped source because Chromium does not reliably surface a monitor device as a microphone.
 
+### ESP32-S3 speaker
+
+The board uses USB Serial/JTAG for provisioning, diagnostics, and flash updates.
+Once provisioned, it uses Wi-Fi for Gateway access. WakeNet and MultiNet run
+locally. The board verifies the Gateway's pinned CA and uses its enrolled P-256
+key to sign control events and SDP offers. Audio travels over a LAN DTLS-SRTP
+connection using G.711 A-law at 8 kHz. Dedicated loopback RTP ports `49003`
+and `49004` connect the board's media path to the same Chromium audio devices.
+
+The Gateway has one active WebRTC peer shared by the PWA and the board. Its
+peer lock covers the selected peer and the on-demand GStreamer enable files.
+Connection callbacks and browser status observations carry the peer they
+observed so a late callback cannot detach a replacement. The firmware also
+tags media events with the attempt that created the media task. A connected
+audio path and an authoritative browser Voice state are both required to
+report a live Voice session.
+
 ## Authentication and voice activation
 
 Authentication is a human recovery workflow, not a voice-start side effect.
@@ -185,6 +202,8 @@ Push subscriptions and VAPID keys live under `/data/state`. Notifications are ad
 | `127.0.0.1:9222/tcp` | Chromium CDP | Loopback only |
 | `127.0.0.1:49001/udp` | GStreamer uplink | Loopback RTP |
 | `127.0.0.1:49002/udp` | GStreamer downlink | Loopback RTP |
+| `127.0.0.1:49003/udp` | GStreamer device uplink | Loopback PCMA RTP |
+| `127.0.0.1:49004/udp` | Go gateway device downlink | Loopback PCMA RTP |
 
 Defense-in-depth controls include:
 

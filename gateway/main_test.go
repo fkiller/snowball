@@ -105,7 +105,7 @@ func TestRecoverStalledDeviceVoiceClosesPeerAndStopsBrowserVoice(t *testing.T) {
 		lastDeviceUplinkAudio:  time.Now().Add(-deviceAudioStallAfter - time.Second),
 	}
 
-	gateway.recoverStalledDeviceVoice(browserStatus{VoiceActive: true})
+	gateway.recoverStalledDeviceVoice(peer, browserStatus{VoiceActive: true})
 
 	if stopCalls != 1 {
 		t.Fatalf("expected one browser Voice stop, got %d", stopCalls)
@@ -144,7 +144,7 @@ func TestRecoverStalledDeviceVoiceAcceptsContinuousSilentDownlink(t *testing.T) 
 		lastDeviceDownlinkPacket: time.Now(),
 	}
 
-	gateway.recoverStalledDeviceVoice(browserStatus{VoiceActive: true})
+	gateway.recoverStalledDeviceVoice(peer, browserStatus{VoiceActive: true})
 
 	if stopCalls != 0 {
 		t.Fatalf("continuous silent RTP incorrectly stopped browser Voice %d times", stopCalls)
@@ -159,19 +159,19 @@ func TestDeviceVoiceStatusRequiresTwoInactiveObservations(t *testing.T) {
 		peerDeviceFingerprint:  "device-fingerprint",
 		peerDeviceVoiceStarted: true,
 	}
-	if gateway.observeDeviceVoiceStatus(false) {
+	if gateway.observeDeviceVoiceStatus(gateway.peer, false) {
 		t.Fatal("a single transient inactive observation ended Voice")
 	}
-	if gateway.observeDeviceVoiceStatus(true) {
+	if gateway.observeDeviceVoiceStatus(gateway.peer, true) {
 		t.Fatal("an active observation ended Voice")
 	}
-	if gateway.observeDeviceVoiceStatus(false) {
+	if gateway.observeDeviceVoiceStatus(gateway.peer, false) {
 		t.Fatal("the first inactive observation after recovery ended Voice")
 	}
-	if !gateway.observeDeviceVoiceStatus(false) {
+	if !gateway.observeDeviceVoiceStatus(gateway.peer, false) {
 		t.Fatal("two consecutive inactive observations did not end Voice")
 	}
-	if gateway.observeDeviceVoiceStatus(false) {
+	if gateway.observeDeviceVoiceStatus(gateway.peer, false) {
 		t.Fatal("the same inactive observation was retriggered repeatedly")
 	}
 }
@@ -185,16 +185,16 @@ func TestAuthoritativeDeviceVoiceStatusDoesNotInvertActiveState(t *testing.T) {
 	idle := browserStatus{State: "ready", VoiceButtonPresent: true, VoiceActive: false}
 	transitional := browserStatus{State: "starting", VoiceButtonPresent: false, VoiceActive: false}
 
-	if gateway.observeAuthoritativeDeviceVoiceStatus(active) {
+	if gateway.observeAuthoritativeDeviceVoiceStatus(gateway.peer, active) {
 		t.Fatal("an active Voice observation ended the device peer")
 	}
-	if gateway.observeAuthoritativeDeviceVoiceStatus(idle) {
+	if gateway.observeAuthoritativeDeviceVoiceStatus(gateway.peer, idle) {
 		t.Fatal("the first authoritative idle observation ended Voice")
 	}
-	if !gateway.observeAuthoritativeDeviceVoiceStatus(idle) {
+	if !gateway.observeAuthoritativeDeviceVoiceStatus(gateway.peer, idle) {
 		t.Fatal("two authoritative idle observations did not end Voice")
 	}
-	if gateway.observeAuthoritativeDeviceVoiceStatus(transitional) {
+	if gateway.observeAuthoritativeDeviceVoiceStatus(gateway.peer, transitional) {
 		t.Fatal("a transitional browser observation ended Voice")
 	}
 	if gateway.deviceVoiceInactiveObservations != 0 {
@@ -454,5 +454,30 @@ func TestClosingPeerDisarmsOnlyItsOnDemandMediaBridge(t *testing.T) {
 				t.Fatalf("media marker still exists after peer close: %v", err)
 			}
 		})
+	}
+}
+
+func TestStalePeerCallbacksLeaveReplacementActive(t *testing.T) {
+	previous := &webrtc.PeerConnection{}
+	replacement := &webrtc.PeerConnection{}
+	gateway := &gateway{
+		peer:                            replacement,
+		peerConnected:                   true,
+		peerDeviceFingerprint:           "replacement-device",
+		peerDeviceVoiceStarted:          true,
+		peerAudioMode:                   "pcma",
+		deviceVoiceInactiveObservations: 1,
+	}
+	idle := browserStatus{State: "ready", VoiceButtonPresent: true}
+	if gateway.observeAuthoritativeDeviceVoiceStatus(previous, idle) {
+		t.Fatal("idle observation for the previous peer ended the replacement's Voice")
+	}
+	gateway.observeAuthoritativeDeviceVoiceStatus(previous, browserStatus{State: "starting"})
+	gateway.closePeerIfCurrent(previous)
+	if gateway.peer != replacement || !gateway.peerConnected || !gateway.peerDeviceVoiceStarted {
+		t.Fatal("closing the previous peer changed the replacement")
+	}
+	if gateway.deviceVoiceInactiveObservations != 1 {
+		t.Fatal("browser observations for the previous peer changed the replacement's debounce")
 	}
 }

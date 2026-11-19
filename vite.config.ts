@@ -10,6 +10,14 @@ export default defineConfig(async () => {
   const { cloudflare } = await import("@cloudflare/vite-plugin");
 
   return {
+    environments: {
+      rsc: {
+        build: {
+          // The RSC manifest sidecars are emitted beside the server entry.
+          rolldownOptions: { output: { chunkFileNames: "[name]-[hash].js" } },
+        },
+      },
+    },
     plugins: [
       {
         // vinext detects the worker bundler and injects Cloudflare tracing.

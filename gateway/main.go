@@ -304,8 +304,18 @@ func (g *gateway) close() {
 	_ = g.deviceDownConn.Close()
 }
 
-func (g *gateway) closeActivePeer() bool {
+func (g *gateway) closeActivePeer() {
+	g.releasePeer(nil)
+}
+
+// releasePeer removes the peer and its media marker in the same critical
+// section. A nil expected peer is used for explicit shutdown and logout.
+func (g *gateway) releasePeer(expected *webrtc.PeerConnection) (closed, ownedVoice bool) {
 	g.peerMu.Lock()
+	if expected != nil && g.peer != expected {
+		g.peerMu.Unlock()
+		return false, false
+	}
 	peer := g.peer
 	previousAudioMode := g.peerAudioMode
 	ownedDeviceVoice := g.peerDeviceFingerprint != "" && g.peerDeviceVoiceStarted
@@ -339,6 +349,11 @@ func (g *gateway) closeActivePeer() bool {
 	g.deviceDownlinkFrames = 0
 	g.deviceDownlinkBytes = 0
 	g.audioMu.Unlock()
+	if previousAudioMode == "pcma" {
+		_ = os.Remove(deviceMediaActivePath)
+	} else if previousAudioMode == "opus" {
+		_ = os.Remove(browserMediaActivePath)
+	}
 	g.peerMu.Unlock()
 	if peer != nil && previousAudioMode == "pcma" {
 		log.Printf(
@@ -353,18 +368,13 @@ func (g *gateway) closeActivePeer() bool {
 			downlinkBytes,
 		)
 	}
-	if previousAudioMode == "pcma" {
-		_ = os.Remove(deviceMediaActivePath)
-	} else if previousAudioMode == "opus" {
-		_ = os.Remove(browserMediaActivePath)
-	}
 	if peer != nil {
 		_ = peer.Close()
 	}
 	if ownedDeviceProject {
 		g.stopBrowserProject("device media peer closed")
 	}
-	return ownedDeviceVoice
+	return true, ownedDeviceVoice
 }
 
 func shortFingerprint(value string) string {
@@ -404,16 +414,17 @@ func (g *gateway) stopBrowserProject(reason string) {
 
 func (g *gateway) enforcePeerSession() {
 	g.peerMu.RLock()
-	hasPeer := g.peer != nil
+	peer := g.peer
 	hasSession := g.peerHasSession
 	session := g.peerSession
 	deviceFingerprint := g.peerDeviceFingerprint
 	g.peerMu.RUnlock()
-	adminExpired := hasPeer && deviceFingerprint == "" && (!hasSession || !g.auth.sessionKeyActive(session))
-	deviceRevoked := hasPeer && deviceFingerprint != "" && !g.enrollment.isActive(deviceFingerprint)
+	adminExpired := peer != nil && deviceFingerprint == "" && (!hasSession || !g.auth.sessionKeyActive(session))
+	deviceRevoked := peer != nil && deviceFingerprint != "" && !g.enrollment.isActive(deviceFingerprint)
 	if adminExpired || deviceRevoked {
-		g.closeActivePeer()
-		g.stopBrowserVoice("peer authorization ended")
+		if closed, _ := g.releasePeer(peer); closed {
+			g.stopBrowserVoice("peer authorization ended")
+		}
 	}
 }
 
@@ -445,38 +456,36 @@ func pcmaHasSignal(payload []byte) bool {
 	return signal >= (len(payload)+7)/8
 }
 
-func (g *gateway) recoverStalledDeviceVoice(status browserStatus) {
+func (g *gateway) recoverStalledDeviceVoice(peer *webrtc.PeerConnection, status browserStatus) {
 	if !status.VoiceActive {
 		return
 	}
 	g.peerMu.RLock()
-	devicePeerActive := g.peer != nil && g.peerConnected && g.peerDeviceFingerprint != "" &&
+	devicePeerActive := peer != nil && g.peer == peer && g.peerConnected && g.peerDeviceFingerprint != "" &&
 		g.peerDeviceVoiceStarted && g.peerAudioMode == "pcma"
-	g.peerMu.RUnlock()
 	if !devicePeerActive {
+		g.peerMu.RUnlock()
 		return
 	}
 	now := time.Now()
-	g.audioMu.RLock()
+	g.audioMu.Lock()
 	lastUplink := g.lastDeviceUplinkAudio
 	lastDownlinkPacket := g.lastDeviceDownlinkPacket
 	lastRecovery := g.lastVoiceRecovery
-	g.audioMu.RUnlock()
 	if lastUplink.IsZero() || now.Sub(lastUplink) < deviceAudioStallAfter ||
 		(!lastDownlinkPacket.IsZero() && now.Sub(lastDownlinkPacket) < deviceAudioStallAfter) ||
 		(!lastRecovery.IsZero() && now.Sub(lastRecovery) < voiceRecoveryCooldown) {
-		return
-	}
-	g.audioMu.Lock()
-	if !g.lastVoiceRecovery.IsZero() && now.Sub(g.lastVoiceRecovery) < voiceRecoveryCooldown {
 		g.audioMu.Unlock()
+		g.peerMu.RUnlock()
 		return
 	}
 	g.lastVoiceRecovery = now
 	g.audioMu.Unlock()
-	log.Printf("recovering stalled device Voice: no downlink PCMA packets for %s after microphone activity", deviceAudioStallAfter)
-	g.closeActivePeer()
-	g.stopBrowserVoice("device audio stalled")
+	g.peerMu.RUnlock()
+	if closed, _ := g.releasePeer(peer); closed {
+		log.Printf("recovering stalled device Voice: no downlink PCMA packets for %s after microphone activity", deviceAudioStallAfter)
+		g.stopBrowserVoice("device audio stalled")
+	}
 }
 
 func (g *gateway) handleOffer(w http.ResponseWriter, r *http.Request) {
@@ -677,7 +686,17 @@ func (g *gateway) installPeer(
 		return nil, http.StatusGatewayTimeout, errors.New("ICE gathering timed out")
 	}
 
+	activePath := browserMediaActivePath
+	if audioMode == "pcma" {
+		activePath = deviceMediaActivePath
+	}
 	g.peerMu.Lock()
+	if err := os.WriteFile(activePath, []byte("active\n"), 0600); err != nil {
+		g.peerMu.Unlock()
+		_ = peer.Close()
+		return nil, http.StatusInternalServerError, errors.New("could not start the audio bridge")
+	}
+
 	oldPeer := g.peer
 	oldAudioMode := g.peerAudioMode
 	oldPeerOwnedDeviceVoice := g.peerDeviceFingerprint != "" && g.peerDeviceVoiceStarted
@@ -709,18 +728,6 @@ func (g *gateway) installPeer(
 	g.peerDeviceProjectStarted = false
 	g.deviceVoiceInactiveObservations = 0
 	g.peerAudioMode = audioMode
-	g.peerMu.Unlock()
-	activePath := browserMediaActivePath
-	if audioMode == "pcma" {
-		activePath = deviceMediaActivePath
-	}
-	if err := os.WriteFile(activePath, []byte("active\n"), 0600); err != nil {
-		g.closeActivePeer()
-		if oldPeer != nil {
-			_ = oldPeer.Close()
-		}
-		return nil, http.StatusInternalServerError, errors.New("could not start the audio bridge")
-	}
 	if oldAudioMode != "" && oldAudioMode != audioMode {
 		if oldAudioMode == "pcma" {
 			_ = os.Remove(deviceMediaActivePath)
@@ -728,6 +735,7 @@ func (g *gateway) installPeer(
 			_ = os.Remove(browserMediaActivePath)
 		}
 	}
+	g.peerMu.Unlock()
 	if oldPeer != nil {
 		_ = oldPeer.Close()
 	}
@@ -741,14 +749,15 @@ func (g *gateway) installPeer(
 	return peer.LocalDescription(), http.StatusOK, nil
 }
 
-func (g *gateway) closePeerIfCurrent(candidate *webrtc.PeerConnection) {
+func (g *gateway) currentMediaPeer() *webrtc.PeerConnection {
 	g.peerMu.RLock()
-	current := g.peer == candidate
-	g.peerMu.RUnlock()
-	if current {
-		if g.closeActivePeer() {
-			g.stopBrowserVoice("device media peer closed")
-		}
+	defer g.peerMu.RUnlock()
+	return g.peer
+}
+
+func (g *gateway) closePeerIfCurrent(candidate *webrtc.PeerConnection) {
+	if _, ownedVoice := g.releasePeer(candidate); ownedVoice {
+		g.stopBrowserVoice("device media peer closed")
 	}
 }
 
@@ -1289,9 +1298,12 @@ func (g *gateway) authoritativeVoiceLive(
 // observations for an already-started device Voice peer. ChatGPT may briefly
 // hide its End Voice control during a turn transition; one missing control is
 // not sufficient evidence that the transport session ended.
-func (g *gateway) observeDeviceVoiceStatus(voiceActive bool) bool {
+func (g *gateway) observeDeviceVoiceStatus(peer *webrtc.PeerConnection, voiceActive bool) bool {
 	g.peerMu.Lock()
 	defer g.peerMu.Unlock()
+	if g.peer != peer {
+		return false
+	}
 	if g.peerDeviceFingerprint == "" || !g.peerDeviceVoiceStarted {
 		g.deviceVoiceInactiveObservations = 0
 		return false
@@ -1317,14 +1329,16 @@ func (g *gateway) observeDeviceVoiceStatus(voiceActive bool) bool {
 // passed the derived "browser idle" value into observeDeviceVoiceStatus,
 // inverting active and inactive states and closing a healthy peer two polls
 // after Voice started.
-func (g *gateway) observeAuthoritativeDeviceVoiceStatus(status browserStatus) bool {
+func (g *gateway) observeAuthoritativeDeviceVoiceStatus(peer *webrtc.PeerConnection, status browserStatus) bool {
 	if status.State != "ready" || !status.VoiceButtonPresent {
 		g.peerMu.Lock()
-		g.deviceVoiceInactiveObservations = 0
+		if g.peer == peer {
+			g.deviceVoiceInactiveObservations = 0
+		}
 		g.peerMu.Unlock()
 		return false
 	}
-	return g.observeDeviceVoiceStatus(status.VoiceActive)
+	return g.observeDeviceVoiceStatus(peer, status.VoiceActive)
 }
 
 func (g *gateway) watchBrowser() {
@@ -1332,6 +1346,7 @@ func (g *gateway) watchBrowser() {
 	defer ticker.Stop()
 	for range ticker.C {
 		g.enforcePeerSession()
+		peer := g.currentMediaPeer()
 		status, _, err := g.browserRequest(http.MethodGet, "/status")
 		if err != nil {
 			continue
@@ -1339,11 +1354,11 @@ func (g *gateway) watchBrowser() {
 		// Only a fully inspected, ready page is evidence that Voice is idle.
 		// During navigation ChatGPT briefly hides both controls; treating that
 		// transient as an end would cut the first turn off while Voice starts.
-		if g.observeAuthoritativeDeviceVoiceStatus(status) {
+		if peer != nil && g.observeAuthoritativeDeviceVoiceStatus(peer, status) {
 			log.Printf("device Voice browser state inactive twice; closing media peer")
-			g.closeActivePeer()
+			g.releasePeer(peer)
 		}
-		g.recoverStalledDeviceVoice(status)
+		g.recoverStalledDeviceVoice(peer, status)
 		g.browserMu.Lock()
 		g.lastBrowser = status
 		alertKind := ""

@@ -1,5 +1,50 @@
 # Snowball development handoff
 
+## November maintenance
+
+The objective is to refresh the LAN Gateway and the Waveshare ESP32-S3 speaker,
+then verify a complete spoken wake, response, end and idle cycle. The checked-in
+baseline is `6f0000c`, the merge of [PR #21](https://github.com/fkiller/snowball/pull/21).
+Its [read-only artifact roundtrip](https://github.com/fkiller/snowball/actions/runs/37215811520)
+already passed. The October notes below describe the previous milestone.
+
+This maintenance candidate guards peer and audio-bridge state against stale
+WebRTC teardown and browser observations, bounds PWA Voice transitions,
+preserves the firmware attempt ID through media teardown, and verifies that
+failed Gateway replacements restore a healthy original container. The
+[architecture](ARCHITECTURE.md) and [roadmap](docs/ROADMAP.md) record the device
+path, outstanding lifecycle and operational work, and acceptance criteria.
+
+The first [maintenance CI run](https://github.com/fkiller/snowball/actions/runs/44470684839)
+passed the firmware build, Go race tests and vet, and the web tests. Security
+scans found newly disclosed issues in the October dependency set. The
+candidate upgrades the Go builder and workflow toolchain to 1.27.4,
+`golang.org/x/net` to 0.62.0, React and RSC to 19.3.1, and the affected web
+build dependencies. The regenerated npm lock audit reports zero findings in
+the [dependency resolution run](https://github.com/fkiller/snowball/actions/runs/44471253108).
+The Vite update initially relocated bundled RSC chunks away from their relative
+manifest imports. The selected server chunk naming adjustment keeps them
+together. The [compatibility run](https://github.com/fkiller/snowball/actions/runs/44472054033)
+verified the local Node startup and hydration test with those exact npm locks.
+Use the full Security gate result on the final PR head to approve the build.
+
+Next action: verify all six Security gate checks on the current PR head before
+merging. Build the Gateway from the checked-out candidate in an isolated
+directory and run its browser smoke test with temporary state. Verify the live
+container configuration and back up its state before the approved swap in
+[OpenWrt upgrade and rollback](docs/OPENWRT.md#upgrade-and-rollback). Read the
+board status over its USB Serial/JTAG port, build current firmware, flash using
+the protected helper, and compare pairing and live media before and after
+against the [hardware scenarios](docs/TEST_SCENARIOS.md). Never flash NVS or
+overwrite the router checkout's independent work.
+
+On November 19 the Windows session enumerated the ESP32-S3 at `COM3` but was
+denied an open of the port. Its LAN SSH connection to `192.168.1.1` was also
+denied. No production swap or flash was performed. The reported October
+production image and hardware evidence cannot establish current status.
+
+## October publication and verification history
+
 ## Current objective
 
 Maintain the public Snowball-Voice ESP32 client and Snowball-Voice-Gate LAN
