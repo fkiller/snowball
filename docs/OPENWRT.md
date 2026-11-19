@@ -82,8 +82,10 @@ SNOWBALL_DEPLOY_IMAGE=snowball-voice:0.4.0-alpha.1 \
 ```
 
 The deployment helper retains the prior container as a rollback target and
-preserves its existing `/data` mount. Review all reported health/auth/browser/
-console checks. For manual rollback, stop/remove only the failed replacement,
+reuses the existing named `/data` volume or bind mount. A failed deployment
+reports a successful rollback only after the original container is healthy.
+Review all reported health, auth, browser, and console checks. For manual
+rollback, stop/remove only the failed replacement,
 rename the preserved rollback container to `snowball-voice`, and start it using
 the same daemon. Check the exact names locally before any destructive command.
 Never use `down -v`, erase NVS, or delete a user's credential volume.

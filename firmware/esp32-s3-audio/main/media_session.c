@@ -149,9 +149,9 @@ static int16_t alaw_to_linear(uint8_t encoded) {
     return (int16_t)((encoded & 0x80) ? value : -value);
 }
 
-static void publish(snowball_media_event_t event, const char *detail) {
+static void publish(snowball_media_event_t event, uint32_t attempt, const char *detail) {
     snowball_media_callback_t callback = event_callback;
-    if (callback) callback(event, session_attempt, detail);
+    if (callback) callback(event, attempt, detail);
 }
 
 static int peer_state_callback(esp_peer_state_t state, void *context) {
@@ -492,7 +492,8 @@ static void log_media_metrics(void) {
 
 static void media_task(void *argument) {
     (void)argument;
-    diagnostics_memory_snapshot("media_task_start", session_attempt);
+    const uint32_t attempt = session_attempt;
+    diagnostics_memory_snapshot("media_task_start", attempt);
     const char *failure = NULL;
     bool published_connected = false;
     char *answer_sdp = NULL;
@@ -528,7 +529,7 @@ static void media_task(void *argument) {
         .on_audio_data = peer_audio_callback,
     };
 
-    publish(SNOWBALL_MEDIA_CONNECTING, "creating_peer");
+    publish(SNOWBALL_MEDIA_CONNECTING, attempt, "creating_peer");
     int peer_result = esp_peer_open(&config, esp_peer_get_default_impl(), &active_peer);
     diagnostics_memory_snapshot("peer_open", session_attempt);
     if (peer_result != ESP_PEER_ERR_NONE) {
@@ -615,7 +616,7 @@ static void media_task(void *argument) {
                 }
                 published_connected = true;
                 diagnostics_memory_snapshot("voice_connected", session_attempt);
-                publish(SNOWBALL_MEDIA_CONNECTED, "pcma_connected");
+                publish(SNOWBALL_MEDIA_CONNECTED, attempt, "pcma_connected");
             }
             send_prevoice_audio(active_peer);
             portENTER_CRITICAL(&media_lock);
@@ -716,6 +717,7 @@ cleanup:
     portEXIT_CRITICAL(&media_lock);
     publish(
         failure ? SNOWBALL_MEDIA_FAILED : SNOWBALL_MEDIA_ENDED,
+        attempt,
         failure ? failure : (transport_was_closed ? "dtls_closed" : (was_connected ? "peer_closed" : "stopped"))
     );
     vTaskDelete(NULL);

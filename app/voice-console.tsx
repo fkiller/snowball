@@ -36,13 +36,18 @@ const browserConsoleUrl = "/console/vnc.html?autoconnect=true&resize=scale&view_
 
 function waitForIceGathering(pc: RTCPeerConnection) {
   if (pc.iceGatheringState === "complete") return Promise.resolve();
-  return new Promise<void>((resolve) => {
+  return new Promise<void>((resolve, reject) => {
     const listener = () => {
       if (pc.iceGatheringState === "complete") {
+        window.clearTimeout(timer);
         pc.removeEventListener("icegatheringstatechange", listener);
         resolve();
       }
     };
+    const timer = window.setTimeout(() => {
+      pc.removeEventListener("icegatheringstatechange", listener);
+      reject(new Error("Timed out preparing the local audio connection."));
+    }, 8000);
     pc.addEventListener("icegatheringstatechange", listener);
   });
 }
@@ -104,14 +109,18 @@ export function VoiceConsole() {
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
   }, []);
 
-  const waitForBrowserVoiceState = useCallback(async (active: boolean, timeoutMs: number) => {
+  const waitForBrowserVoiceState = useCallback(async (active: boolean, timeoutMs: number, operation: number) => {
     const deadline = Date.now() + timeoutMs;
     let latest: GatewayStatus | null = null;
-    while (Date.now() < deadline) {
+    while (operationRef.current === operation && Date.now() < deadline) {
       try {
-        const response = await request("/api/status", { cache: "no-store" });
+        const response = await request("/api/status", {
+          cache: "no-store",
+          signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+        });
         if (response.ok) {
           latest = (await response.json()) as GatewayStatus;
+          if (operationRef.current !== operation) return null;
           setStatus(latest);
           const live = Boolean(latest.voiceLive);
           const browserIdle = latest.browser.voiceActive === false;
@@ -127,7 +136,7 @@ export function VoiceConsole() {
   }, [request]);
 
   const stopVoice = useCallback(async () => {
-    operationRef.current += 1;
+    const operation = ++operationRef.current;
     intentionalStopRef.current = true;
     voiceWasActiveRef.current = false;
     setSession("stopping");
@@ -142,7 +151,8 @@ export function VoiceConsole() {
       // The status check below is authoritative even if the stop request timed
       // out while the browser was completing its own Voice transition.
     }
-    const stopped = await waitForBrowserVoiceState(false, 7000);
+    const stopped = await waitForBrowserVoiceState(false, 7000, operation);
+    if (operationRef.current !== operation) return;
     if (stopped?.voiceLive === false && stopped.browser.voiceActive === false) {
       setSession("idle");
       setNotice("Conversation ended.");
@@ -181,6 +191,7 @@ export function VoiceConsole() {
 
   useEffect(() => {
     return () => {
+      operationRef.current += 1;
       intentionalStopRef.current = true;
       releaseLocalAudio();
     };
@@ -247,11 +258,12 @@ export function VoiceConsole() {
       for (const track of media.getAudioTracks()) peer.addTrack(track, media);
 
       peer.addEventListener("track", (event) => {
-        if (!remoteAudioRef.current) return;
+        if (peerRef.current !== peer || superseded() || !remoteAudioRef.current) return;
         remoteAudioRef.current.srcObject = event.streams[0];
         void remoteAudioRef.current.play();
       });
       peer.addEventListener("connectionstatechange", () => {
+        if (peerRef.current !== peer || superseded()) return;
         if (peer.connectionState === "connected") {
           setNotice("Audio connected. Starting ChatGPT Voice…");
         } else if (["failed", "disconnected", "closed"].includes(peer.connectionState)) {
@@ -264,6 +276,7 @@ export function VoiceConsole() {
       const offer = await peer.createOffer({ offerToReceiveAudio: true });
       await peer.setLocalDescription(offer);
       await waitForIceGathering(peer);
+      if (superseded()) return;
 
       const response = await request("/api/webrtc/offer", {
         method: "POST",
@@ -274,6 +287,7 @@ export function VoiceConsole() {
       const answer = (await response.json()) as RTCSessionDescriptionInit;
       if (superseded()) return;
       await peer.setRemoteDescription(answer);
+      if (superseded()) return;
 
       const voiceResponse = await request("/api/voice/start", { method: "POST" });
       if (superseded()) {
@@ -287,7 +301,8 @@ export function VoiceConsole() {
       }
       const browserStatus = (await voiceResponse.json()) as GatewayStatus["browser"];
       if (superseded()) return;
-      const liveStatus = await waitForBrowserVoiceState(true, 5000);
+      const liveStatus = await waitForBrowserVoiceState(true, 5000, operation);
+      if (superseded()) return;
       voiceWasActiveRef.current = Boolean(liveStatus?.voiceLive);
       if (liveStatus?.voiceLive) {
         setSession("active");

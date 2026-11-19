@@ -18,6 +18,15 @@ This page tracks remaining work rather than repeating installation or test comma
 - Windows/macOS LAN Linux VM onboarding, phone media/alerts/recovery,
   reboot/autostart, and approved real upgrade/rollback acceptance.
 
+## Maintenance priorities
+
+| Priority | Review finding | Follow-up and acceptance |
+| --- | --- | --- |
+| 1 | Physical evidence predates the current Gateway and firmware. Container health does not establish that Chromium can start Voice or that the board can receive audio. | Validate the checked-in firmware and isolated Gateway image, deploy them with the original state, then run the signed-offer, audible-response, end, and silence cases above. |
+| 2 | The Gateway shares one browser and one media peer. Peer replacement is guarded by peer identity, while browser actions are serialized independently. | Add a lifecycle integration scenario that overlaps a device disconnect, a project cancellation, and a new PWA or device session. Use the result to guide consolidation of browser-operation ownership in the Gateway. |
+| 3 | The Playwright adapter depends on the current ChatGPT DOM. Synthetic container smoke tests prove the plumbing and auth boundary against a controlled page. | Run a periodic, explicitly initiated live smoke against the signed-in profile, recording control availability and timing without storing conversations or credentials. |
+| 4 | The device registry recognizes revoked keys but Admin has no revocation workflow. | Add an authenticated revocation operation and test active-media teardown followed by rejection of events and offers from the revoked board. |
+
 ## Production security
 
 - Custom wake model trained and validated on the supported board.
