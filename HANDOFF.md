@@ -22,6 +22,10 @@ candidate upgrades the Go builder and workflow toolchain to 1.27.4,
 `golang.org/x/net` to 0.62.0, React and RSC to 19.3.1, and the affected web
 build dependencies. The regenerated npm lock audit reports zero findings in
 the [dependency resolution run](https://github.com/fkiller/snowball/actions/runs/44471253108).
+The Vite update initially relocated bundled RSC chunks away from their relative
+manifest imports. The selected server chunk naming adjustment keeps them
+together. The [compatibility run](https://github.com/fkiller/snowball/actions/runs/44472054033)
+verified the local Node startup and hydration test with those exact npm locks.
 Use the full Security gate result on the final PR head to approve the build.
 
 Next action: verify all six Security gate checks on the current PR head before
