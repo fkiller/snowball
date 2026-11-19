@@ -15,6 +15,15 @@ failed Gateway replacements restore a healthy original container. The
 [architecture](ARCHITECTURE.md) and [roadmap](docs/ROADMAP.md) record the device
 path, outstanding lifecycle and operational work, and acceptance criteria.
 
+The first [maintenance CI run](https://github.com/fkiller/snowball/actions/runs/44470684839)
+passed the firmware build, Go race tests and vet, and the web tests. Security
+scans found newly disclosed issues in the October dependency set. The
+candidate upgrades the Go builder and workflow toolchain to 1.27.4,
+`golang.org/x/net` to 0.62.0, React and RSC to 19.3.1, and the affected web
+build dependencies. The regenerated npm lock audit reports zero findings in
+the [dependency resolution run](https://github.com/fkiller/snowball/actions/runs/44471253108).
+Use the full Security gate result on the final PR head to approve the build.
+
 Next action: verify all six Security gate checks on the current PR head before
 merging. Build the Gateway from the checked-out candidate in an isolated
 directory and run its browser smoke test with temporary state. Verify the live
