@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        bundler: [current-vinext, existing-cloudflare]
+        bundler: [current-vinext, root-worker-chunks]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -30,8 +30,24 @@ jobs:
         run: |
           npm pkg set devDependencies.react-server-dom-webpack=19.3.1 devDependencies.vite=8.3.8 devDependencies.typescript-eslint=8.73.0 devDependencies.@cloudflare/vite-plugin=1.70.0 devDependencies.wrangler=4.157.0 dependencies.react=19.3.1 dependencies.react-dom=19.3.1
           case "$BUNDLER" in
-            current-vinext) npm pkg set devDependencies.vinext=1.4.3 ;;
-            existing-cloudflare) npm pkg set devDependencies.@cloudflare/vite-plugin=1.62.4 devDependencies.wrangler=4.146.0 overrides.sharp=0.35.5 overrides.undici=7.30.1 ;;
+            current-vinext) npm pkg set devDependencies.vinext=1.4.3 devDependencies.@vitejs/plugin-rsc=0.5.38 devDependencies.@vitejs/plugin-react=6.2.1 ;;
+            root-worker-chunks)
+              python - <<'PY'
+          import pathlib
+          p = pathlib.Path("vite.config.ts")
+          text = p.read_text()
+          p.write_text(text.replace("  return {\n", """  return {
+              environments: {
+                rsc: {
+                  build: {
+                    // The RSC manifest sidecars are emitted beside the server entry.
+                    rolldownOptions: { output: { chunkFileNames: "[name]-[hash].js" } },
+                  },
+                },
+              },
+          """, 1))
+          PY
+              ;;
           esac
           npm install --package-lock-only --ignore-scripts --no-audit
           npm update zod fast-uri --package-lock-only --ignore-scripts --no-audit
@@ -45,10 +61,11 @@ jobs:
             package-lock.json
             gateway/go.mod
             gateway/go.sum
+            vite.config.ts
           if-no-files-found: error
           retention-days: 1
       - name: Print a transport copy of the dependency patch
-        run: git diff -- package.json package-lock.json gateway/go.mod gateway/go.sum | gzip -n | base64 | sed 's/^/SNOWBALL_LOCK_PATCH /'
+        run: git diff -- package.json package-lock.json gateway/go.mod gateway/go.sum vite.config.ts | gzip -n | base64 | sed 's/^/SNOWBALL_LOCK_PATCH /'
       - name: Audit resolved npm locks
         run: npm audit --audit-level=high
       - name: Verify the local Node entry
