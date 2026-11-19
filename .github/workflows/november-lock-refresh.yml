@@ -25,9 +25,9 @@ jobs:
           npm pkg set devDependencies.react-server-dom-webpack=19.3.1 devDependencies.vite=8.3.8 devDependencies.typescript-eslint=8.73.0 devDependencies.@cloudflare/vite-plugin=1.70.0 devDependencies.wrangler=4.157.0 dependencies.react=19.3.1 dependencies.react-dom=19.3.1
           npm install --package-lock-only --ignore-scripts --no-audit
           npm update zod fast-uri --package-lock-only --ignore-scripts --no-audit
-          (cd gateway && go get golang.org/x/net@v0.60.0 && go mod tidy)
+          (cd gateway && go get golang.org/x/net@v0.62.0 && go mod tidy)
       - name: Retain the manifests and generated locks
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0c
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: november-manifests
           path: |
